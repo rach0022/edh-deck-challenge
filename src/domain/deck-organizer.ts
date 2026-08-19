@@ -9,12 +9,21 @@ import { COLOR_COMBINATIONS, type SlotCategory } from './color-combinations.js';
 import { resolveColorIdentity, colorIdentityToKey } from './color-identity.js';
 import type { ExtractionResult } from './commander-extractor.js';
 
+/** Commander info carried through to the renderer. */
+export interface CommanderSlotInfo {
+  name: string;
+  imageUrl: string | null;
+  setCode: string;
+  collectorNumber: string;
+}
+
 /** A deck entry within a color combination slot. */
 export interface DeckSlotEntry {
   deckName: string;
   deckId: string;
   commanderNames: string[];
   commanderImages: (string | null)[];
+  commanders: CommanderSlotInfo[];
 }
 
 /** A single color combination slot with its assigned decks. */
@@ -84,6 +93,12 @@ export function organizeDecks(extractions: ExtractionResult[], username: string)
         deckId: extraction.deckId,
         commanderNames: extraction.commanders.map((c) => c.name),
         commanderImages: extraction.commanders.map((c) => c.imageUrl),
+        commanders: extraction.commanders.map((c) => ({
+          name: c.name,
+          imageUrl: c.imageUrl,
+          setCode: c.setCode,
+          collectorNumber: c.collectorNumber,
+        })),
       });
     }
   }

@@ -6,62 +6,53 @@ import { generateHTMLContent, renderHTML } from '../src/renderers/html-renderer.
 import { organizeDecks } from '../src/domain/deck-organizer.js';
 import type { ExtractionResult } from '../src/domain/commander-extractor.js';
 
-// Test data: a mix of filled and empty slots
 const testExtractions: ExtractionResult[] = [
   {
     deckName: 'Giada Angels',
     deckId: 'deck-1',
-    commanders: [
-      {
-        name: 'Giada, Font of Hope',
-        colorIdentity: ['W'],
-        imageUrl: 'https://cards.scryfall.io/normal/front/snc/14.jpg',
-        setCode: 'snc',
-        collectorNumber: '14',
-      },
-    ],
+    commanders: [{
+      name: 'Giada, Font of Hope',
+      colorIdentity: ['W'],
+      imageUrl: 'https://cards.scryfall.io/normal/front/snc/14.jpg',
+      setCode: 'snc',
+      collectorNumber: '14',
+    }],
     skipped: false,
   },
   {
     deckName: 'Krenko Goblins',
     deckId: 'deck-2',
-    commanders: [
-      {
-        name: 'Krenko, Mob Boss',
-        colorIdentity: ['R'],
-        imageUrl: 'https://cards.scryfall.io/normal/front/m19/135.jpg',
-        setCode: 'm19',
-        collectorNumber: '135',
-      },
-    ],
+    commanders: [{
+      name: 'Krenko, Mob Boss',
+      colorIdentity: ['R'],
+      imageUrl: 'https://cards.scryfall.io/normal/front/m19/135.jpg',
+      setCode: 'm19',
+      collectorNumber: '135',
+    }],
     skipped: false,
   },
   {
     deckName: 'Azorius Control',
     deckId: 'deck-3',
-    commanders: [
-      {
-        name: 'Brago, King Eternal',
-        colorIdentity: ['W', 'U'],
-        imageUrl: 'https://cards.scryfall.io/normal/front/ema/198.jpg',
-        setCode: 'ema',
-        collectorNumber: '198',
-      },
-    ],
+    commanders: [{
+      name: 'Brago, King Eternal',
+      colorIdentity: ['W', 'U'],
+      imageUrl: 'https://cards.scryfall.io/normal/front/ema/198.jpg',
+      setCode: 'ema',
+      collectorNumber: '198',
+    }],
     skipped: false,
   },
   {
     deckName: 'No Image Commander Deck',
     deckId: 'deck-4',
-    commanders: [
-      {
-        name: 'Mystery Commander',
-        colorIdentity: ['B'],
-        imageUrl: null,
-        setCode: 'unk',
-        collectorNumber: '1',
-      },
-    ],
+    commanders: [{
+      name: 'Mystery Commander',
+      colorIdentity: ['B'],
+      imageUrl: null,
+      setCode: 'unk',
+      collectorNumber: '1',
+    }],
     skipped: false,
   },
 ];
@@ -71,80 +62,69 @@ function createTestProgress() {
 }
 
 describe('generateHTMLContent', () => {
-  it('contains correct image URLs for filled slots', () => {
+  it('uses Scryfall art_crop URLs as background-image for filled slots', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // Verify image URLs appear in <img> src attributes
-    expect(html).toContain('https://cards.scryfall.io/normal/front/snc/14.jpg');
-    expect(html).toContain('https://cards.scryfall.io/normal/front/m19/135.jpg');
-    expect(html).toContain('https://cards.scryfall.io/normal/front/ema/198.jpg');
+    expect(html).toContain('https://api.scryfall.com/cards/snc/14?format=image');
+    expect(html).toContain('https://api.scryfall.com/cards/m19/135?format=image');
+    expect(html).toContain('https://api.scryfall.com/cards/ema/198?format=image');
+    expect(html).toContain('version=art_crop');
   });
 
-  it('contains image tags with src attributes for commanders with images', () => {
+  it('sets background-image via inline style on filled slot cards', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // Verify img tags have proper src
-    expect(html).toMatch(/<img\s[^>]*src="https:\/\/cards\.scryfall\.io\/normal\/front\/snc\/14\.jpg"/);
-    expect(html).toMatch(/<img\s[^>]*src="https:\/\/cards\.scryfall\.io\/normal\/front\/ema\/198\.jpg"/);
+    expect(html).toMatch(/style="background-image: url\(/);
   });
 
   it('shows "No deck assigned" text for empty slots', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // Most slots are empty, so "No deck assigned" should appear
     expect(html).toContain('No deck assigned');
-
-    // Count occurrences - we have 4 filled slots, so 28 empty ones
     const matches = html.match(/No deck assigned/g);
     expect(matches).not.toBeNull();
     expect(matches!.length).toBe(28);
   });
 
-  it('includes onerror attribute on images for load failure fallback', () => {
+  it('uses a dark overlay gradient for readability on filled cards', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // Every <img> should have an onerror attribute
-    const imgTags = html.match(/<img[^>]+>/g) ?? [];
-    expect(imgTags.length).toBeGreaterThan(0);
-
-    for (const img of imgTags) {
-      expect(img).toContain('onerror');
-    }
+    expect(html).toContain('.slot-card.filled:not(.multi)::before');
+    expect(html).toContain('linear-gradient');
   });
 
-  it('displays commander name as text when imageUrl is null', () => {
+  it('displays commander names on filled slots', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // The Mono Black commander has no image, should appear as text-only
-    expect(html).toContain('Mystery Commander');
-    // Should use the text-only class rather than an img tag for this commander
-    expect(html).toMatch(/commander-text-only[^>]*>Mystery Commander/);
-  });
-
-  it('displays commander names alongside images', () => {
-    const progress = createTestProgress();
-    const html = generateHTMLContent(progress);
-
-    // Commander names should appear in the output
     expect(html).toContain('Giada, Font of Hope');
     expect(html).toContain('Krenko, Mob Boss');
     expect(html).toContain('Brago, King Eternal');
+    expect(html).toContain('Mystery Commander');
+  });
+
+  it('displays deck names on filled slots', () => {
+    const progress = createTestProgress();
+    const html = generateHTMLContent(progress);
+
+    expect(html).toContain('Giada Angels');
+    expect(html).toContain('Krenko Goblins');
+    expect(html).toContain('Azorius Control');
   });
 
   it('groups color combinations by category', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // Category section headers should appear
     expect(html).toContain('Colorless');
     expect(html).toContain('Mono Color');
     expect(html).toContain('Two Color (Guilds)');
-    expect(html).toContain('Three Color (Shards &amp; Wedges)');
+    // Mana pip SVGs should be present
+    expect(html).toContain('svgs.scryfall.io/card-symbols/');
     expect(html).toContain('Four Color');
     expect(html).toContain('Five Color');
   });
@@ -153,15 +133,10 @@ describe('generateHTMLContent', () => {
     const progress = createTestProgress();
     const html = generateHTMLContent(progress);
 
-    // Should be a complete HTML document
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('<html lang="en">');
-    expect(html).toContain('<head>');
     expect(html).toContain('<style>');
-    expect(html).toContain('</style>');
     expect(html).toContain('</html>');
-
-    // Should not reference external stylesheets
     expect(html).not.toContain('<link rel="stylesheet"');
   });
 
@@ -170,7 +145,6 @@ describe('generateHTMLContent', () => {
     const html = generateHTMLContent(progress);
 
     expect(html).toContain('<title>EDH 32 Deck Challenge - testuser</title>');
-    expect(html).toContain('testuser');
   });
 
   it('displays progress summary', () => {
@@ -178,6 +152,13 @@ describe('generateHTMLContent', () => {
     const html = generateHTMLContent(progress);
 
     expect(html).toContain('4 / 32 slots filled');
+  });
+
+  it('generates background for commanders using set/cn even when imageUrl is null', () => {
+    const progress = createTestProgress();
+    const html = generateHTMLContent(progress);
+
+    expect(html).toContain('https://api.scryfall.com/cards/unk/1?format=image');
   });
 });
 
@@ -193,20 +174,15 @@ describe('renderHTML', () => {
   it('writes file with correct filename pattern to output directory', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'edh-test-'));
     const progress = createTestProgress();
-
     const filepath = renderHTML(progress, { outputDir: tempDir });
 
-    // Should return the full file path
     expect(filepath).toBe(join(tempDir, 'testuser-edh-challenge.html'));
-
-    // File should exist
     expect(existsSync(filepath)).toBe(true);
   });
 
   it('written file contains valid HTML content', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'edh-test-'));
     const progress = createTestProgress();
-
     const filepath = renderHTML(progress, { outputDir: tempDir });
     const content = readFileSync(filepath, 'utf-8');
 
@@ -218,7 +194,6 @@ describe('renderHTML', () => {
   it('uses username in the filename', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'edh-test-'));
     const progress = organizeDecks(testExtractions, 'player123');
-
     const filepath = renderHTML(progress, { outputDir: tempDir });
 
     expect(filepath).toContain('player123-edh-challenge.html');

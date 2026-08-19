@@ -176,11 +176,11 @@ describe('Integration: Full Pipeline', () => {
 
       // 7. Generate HTML content
       const htmlOutput = generateHTMLContent(progress);
-      expect(htmlOutput).toContain('<img');
-      expect(htmlOutput).toContain('https://cards.example.com/kozilek.jpg');
-      expect(htmlOutput).toContain('https://cards.example.com/brago.jpg');
-      expect(htmlOutput).toContain('https://cards.example.com/wasitora.jpg');
-      expect(htmlOutput).toContain('onerror');
+      expect(htmlOutput).toContain('background-image');
+      expect(htmlOutput).toContain('https://api.scryfall.com/cards/ogw/4');
+      expect(htmlOutput).toContain('https://api.scryfall.com/cards/ema/198');
+      expect(htmlOutput).toContain('https://api.scryfall.com/cards/c17/49');
+      expect(htmlOutput).toContain('art_crop');
       expect(htmlOutput).toContain('3 / 32 slots filled');
     });
 

@@ -1,25 +1,40 @@
 /**
  * HTML renderer for the EDH 32 Deck Challenge.
  * Generates a self-contained HTML file with inline CSS showing
- * challenge progress with commander card art.
+ * challenge progress with commander card art as slot backgrounds,
+ * Scryfall mana symbol SVGs for color identity, and CSS fade
+ * animations for slots with multiple decks.
  */
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ChallengeProgress, ColorSlot } from '../domain/deck-organizer.js';
+import type { ChallengeProgress, ColorSlot, DeckSlotEntry } from '../domain/deck-organizer.js';
 import type { SlotCategory } from '../domain/color-combinations.js';
+import type { Color } from '../types.js';
 
 export interface HTMLRenderOptions {
   outputDir: string;
 }
 
-/**
- * Renders the challenge progress as an HTML file and writes it to disk.
- *
- * @param progress - The challenge progress data to render
- * @param options - Rendering options including output directory
- * @returns The file path of the written HTML file
- */
+/** Duration in seconds each deck is shown before fading to the next. */
+const SLIDE_DURATION = 4;
+
+function getScryfallArtCropUrl(setCode: string, collectorNumber: string): string {
+  return `https://api.scryfall.com/cards/${encodeURIComponent(setCode.toLowerCase())}/${encodeURIComponent(collectorNumber)}?format=image&version=art_crop`;
+}
+
+function getManaSymbolHtml(color: Color): string {
+  const url = `https://svgs.scryfall.io/card-symbols/${color}.svg`;
+  return `<img class="mana-pip" src="${url}" alt="${color}" title="${color}" />`;
+}
+
+function renderColorPips(colors: Color[]): string {
+  if (colors.length === 0) {
+    return `<img class="mana-pip" src="https://svgs.scryfall.io/card-symbols/C.svg" alt="C" title="Colorless" />`;
+  }
+  return colors.map((c) => getManaSymbolHtml(c)).join('');
+}
+
 export function renderHTML(progress: ChallengeProgress, options: HTMLRenderOptions): string {
   const content = generateHTMLContent(progress);
   const filename = `${progress.username}-edh-challenge.html`;
@@ -28,20 +43,9 @@ export function renderHTML(progress: ChallengeProgress, options: HTMLRenderOptio
   return filepath;
 }
 
-/**
- * Generates the full HTML content string for the challenge progress.
- *
- * @param progress - The challenge progress data to render
- * @returns Complete self-contained HTML string
- */
 export function generateHTMLContent(progress: ChallengeProgress): string {
   const categoryOrder: SlotCategory[] = [
-    'colorless',
-    'mono',
-    'two-color',
-    'three-color',
-    'four-color',
-    'five-color',
+    'colorless', 'mono', 'two-color', 'three-color', 'four-color', 'five-color',
   ];
 
   const categoryLabels: Record<SlotCategory, string> = {
@@ -54,6 +58,12 @@ export function generateHTMLContent(progress: ChallengeProgress): string {
   };
 
   const slotsByCategory = groupSlotsByCategory(progress.slots);
+
+  // Collect all multi-deck slots to generate their unique @keyframes
+  const multiDeckSlots = progress.slots.filter((s) => s.decks.length > 1);
+  const keyframesCSS = multiDeckSlots
+    .map((slot) => generateSlotKeyframes(slot))
+    .join('\n');
 
   const sections = categoryOrder
     .map((category) => {
@@ -71,6 +81,7 @@ export function generateHTMLContent(progress: ChallengeProgress): string {
   <title>EDH 32 Deck Challenge - ${escapeHtml(progress.username)}</title>
   <style>
 ${getInlineCSS()}
+${keyframesCSS}
   </style>
 </head>
 <body>
@@ -87,6 +98,50 @@ ${sections}
   </footer>
 </body>
 </html>`;
+}
+
+/**
+ * Generates @keyframes for a slot with multiple decks.
+ * Each deck gets equal time visible, with a fade transition between them.
+ */
+function generateSlotKeyframes(slot: ColorSlot): string {
+  const n = slot.decks.length;
+  const totalDuration = n * SLIDE_DURATION;
+  const showPercent = 100 / n;
+  const fadePercent = 8; // % of total animation used for fade transition
+
+  let css = '';
+  for (let i = 0; i < n; i++) {
+    const animName = `fade-${slot.key}-${i}`;
+    const startShow = i * showPercent;
+    const endShow = (i + 1) * showPercent;
+
+    // Each slide: invisible → fade in → visible → fade out → invisible
+    const fadeInStart = Math.max(0, startShow - fadePercent / 2);
+    const fadeInEnd = startShow + fadePercent / 2;
+    const fadeOutStart = endShow - fadePercent / 2;
+    const fadeOutEnd = Math.min(100, endShow + fadePercent / 2);
+
+    css += `    @keyframes ${animName} {\n`;
+    css += `      0% { opacity: 0; }\n`;
+    if (i === 0) {
+      // First slide starts visible
+      css += `      0% { opacity: 1; }\n`;
+      css += `      ${fadeOutStart.toFixed(1)}% { opacity: 1; }\n`;
+      css += `      ${fadeOutEnd.toFixed(1)}% { opacity: 0; }\n`;
+      // Wrap around: fade back in at end for looping
+      css += `      ${(100 - fadePercent / 2).toFixed(1)}% { opacity: 0; }\n`;
+      css += `      100% { opacity: 1; }\n`;
+    } else {
+      css += `      ${fadeInStart.toFixed(1)}% { opacity: 0; }\n`;
+      css += `      ${fadeInEnd.toFixed(1)}% { opacity: 1; }\n`;
+      css += `      ${fadeOutStart.toFixed(1)}% { opacity: 1; }\n`;
+      css += `      ${fadeOutEnd.toFixed(1)}% { opacity: 0; }\n`;
+      css += `      100% { opacity: 0; }\n`;
+    }
+    css += `    }\n`;
+  }
+  return css;
 }
 
 function groupSlotsByCategory(slots: ColorSlot[]): Map<SlotCategory, ColorSlot[]> {
@@ -113,47 +168,81 @@ ${slotCards}
 function renderSlotCard(slot: ColorSlot): string {
   const isFilled = slot.decks.length > 0;
   const filledClass = isFilled ? 'filled' : 'empty';
+  const colorPips = renderColorPips(slot.colors as Color[]);
 
-  let content: string;
-  if (isFilled) {
-    const deckEntries = slot.decks
-      .map((deck) => {
-        const commanders = deck.commanderNames
-          .map((name, i) => {
-            const imageUrl = deck.commanderImages[i];
-            if (imageUrl) {
-              return `          <div class="commander">
-            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
-            <span class="commander-fallback" style="display:none;">${escapeHtml(name)}</span>
-            <span class="commander-name">${escapeHtml(name)}</span>
-          </div>`;
-            }
-            return `          <div class="commander">
-            <span class="commander-text-only">${escapeHtml(name)}</span>
-          </div>`;
-          })
-          .join('\n');
-        return `        <div class="deck-entry">
-          <span class="deck-name">${escapeHtml(deck.deckName)}</span>
-${commanders}
-        </div>`;
-      })
-      .join('\n');
-    content = deckEntries;
-  } else {
-    content = `        <div class="empty-label">No deck assigned</div>`;
-  }
-
-  const colorsDisplay = slot.colors.length > 0 ? ` (${slot.colors.join('')})` : '';
-
-  return `        <div class="slot-card ${filledClass}">
+  if (!isFilled) {
+    return `        <div class="slot-card empty">
           <div class="slot-header">
-            <span class="slot-name">${escapeHtml(slot.name)}${escapeHtml(colorsDisplay)}</span>
+            <span class="slot-name">${escapeHtml(slot.name)}</span>
+            <span class="slot-colors">${colorPips}</span>
           </div>
           <div class="slot-content">
-${content}
+            <div class="empty-label">No deck assigned</div>
           </div>
         </div>`;
+  }
+
+  const isMulti = slot.decks.length > 1;
+  const totalDuration = slot.decks.length * SLIDE_DURATION;
+
+  // For single deck: simple background. For multi: stacked slides with animation.
+  if (!isMulti) {
+    const deck = slot.decks[0];
+    const artUrl = deck.commanders.length > 0
+      ? getScryfallArtCropUrl(deck.commanders[0].setCode, deck.commanders[0].collectorNumber)
+      : '';
+    const bgStyle = artUrl ? ` style="background-image: url('${escapeHtml(artUrl)}');"` : '';
+
+    return `        <div class="slot-card filled"${bgStyle}>
+          <div class="slot-header">
+            <span class="slot-name">${escapeHtml(slot.name)}</span>
+            <span class="slot-colors">${colorPips}</span>
+          </div>
+          <div class="slot-content">
+            ${renderDeckInfo(deck)}
+          </div>
+        </div>`;
+  }
+
+  // Multi-deck: render each deck as an animated slide layer
+  const slides = slot.decks.map((deck, i) => {
+    const artUrl = deck.commanders.length > 0
+      ? getScryfallArtCropUrl(deck.commanders[0].setCode, deck.commanders[0].collectorNumber)
+      : '';
+    const animName = `fade-${slot.key}-${i}`;
+    const animStyle = `animation: ${animName} ${totalDuration}s infinite;`;
+    const bgPart = artUrl ? `background-image: url('${escapeHtml(artUrl)}');` : '';
+
+    return `          <div class="slide" style="${bgPart} ${animStyle}">
+            <div class="slide-overlay"></div>
+            <div class="slide-content">
+              ${renderDeckInfo(deck)}
+            </div>
+          </div>`;
+  }).join('\n');
+
+  return `        <div class="slot-card filled multi">
+          <div class="slot-header">
+            <span class="slot-name">${escapeHtml(slot.name)}</span>
+            <span class="slot-colors">${colorPips}</span>
+          </div>
+          <div class="slides-container">
+${slides}
+          </div>
+        </div>`;
+}
+
+function renderDeckInfo(deck: DeckSlotEntry): string {
+  const commanderNamesHtml = deck.commanders
+    .map((c) => `<span class="commander-name">${escapeHtml(c.name)}</span>`)
+    .join('\n              ');
+
+  return `<div class="deck-info">
+              <span class="deck-name">${escapeHtml(deck.deckName)}</span>
+              <div class="commanders">
+                ${commanderNamesHtml}
+              </div>
+            </div>`;
 }
 
 function escapeHtml(text: string): string {
@@ -222,20 +311,49 @@ function getInlineCSS(): string {
 
     .slots-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 1rem;
     }
 
     .slot-card {
-      background-color: #2a2a4a;
-      border-radius: 8px;
+      position: relative;
+      border-radius: 12px;
       padding: 1rem;
       border: 2px solid #333355;
-      transition: border-color 0.2s;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      background-color: #2a2a4a;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .slot-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     }
 
     .slot-card.filled {
       border-color: #4a6;
+    }
+
+    .slot-card.filled:not(.multi)::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(15, 15, 30, 0.6) 0%,
+        rgba(15, 15, 30, 0.3) 40%,
+        rgba(15, 15, 30, 0.7) 80%,
+        rgba(15, 15, 30, 0.9) 100%
+      );
+      border-radius: 10px;
+      z-index: 1;
     }
 
     .slot-card.empty {
@@ -244,65 +362,105 @@ function getInlineCSS(): string {
     }
 
     .slot-header {
-      margin-bottom: 0.75rem;
+      position: relative;
+      z-index: 3;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
     }
 
     .slot-name {
       font-weight: bold;
-      font-size: 1rem;
-      color: #d0d0f0;
+      font-size: 0.95rem;
+      color: #f0f0ff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    }
+
+    .slot-colors {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .mana-pip {
+      width: 18px;
+      height: 18px;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
     }
 
     .slot-content {
+      position: relative;
+      z-index: 2;
+      flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      justify-content: flex-end;
     }
 
-    .deck-entry {
+    /* Multi-deck carousel */
+    .slides-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 1rem;
+      opacity: 0;
+    }
+
+    .slide-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(15, 15, 30, 0.6) 0%,
+        rgba(15, 15, 30, 0.3) 40%,
+        rgba(15, 15, 30, 0.7) 80%,
+        rgba(15, 15, 30, 0.9) 100%
+      );
+      border-radius: 10px;
+    }
+
+    .slide-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    .deck-info {
       display: flex;
       flex-direction: column;
       gap: 0.25rem;
     }
 
     .deck-name {
-      font-size: 0.85rem;
-      color: #a0a0c0;
+      font-size: 0.8rem;
+      color: #c0c0d0;
       font-style: italic;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     }
 
-    .commander {
+    .commanders {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 0.25rem;
-    }
-
-    .commander img {
-      width: 100%;
-      max-width: 220px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      gap: 0.15rem;
     }
 
     .commander-name {
-      font-size: 0.85rem;
-      color: #c0c0e0;
-      text-align: center;
-    }
-
-    .commander-fallback {
-      font-size: 1rem;
-      color: #f0c040;
-      text-align: center;
-      padding: 1rem;
-    }
-
-    .commander-text-only {
-      font-size: 1rem;
-      color: #f0c040;
-      text-align: center;
-      padding: 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #f0d060;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
     }
 
     .empty-label {

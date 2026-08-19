@@ -9,6 +9,7 @@ Produces both an ASCII terminal diagram and a self-contained HTML file with comm
 ## Features
 
 - Fetches all your public Commander decks from Moxfield (handles pagination)
+- Bypasses Cloudflare bot protection using a headless browser (Puppeteer)
 - Identifies commanders and resolves color identity (supports partner commanders)
 - Maps decks to all 32 color combination slots (colorless through 5-color)
 - Renders a formatted ASCII progress chart to the terminal
@@ -17,8 +18,9 @@ Produces both an ASCII terminal diagram and a self-contained HTML file with comm
 
 ## Prerequisites
 
-- **Node.js** 18 or later (uses native `fetch`)
+- **Node.js** 18 or later (uses native `fetch`; recommended: 22+)
 - **npm** 7 or later
+- **Chrome/Chromium** (automatically downloaded by Puppeteer on install)
 
 ## Installation
 
@@ -27,7 +29,7 @@ Produces both an ASCII terminal diagram and a self-contained HTML file with comm
 git clone https://github.com/rach0022/edh-deck-challenge.git
 cd edh-deck-challenge
 
-# Install dependencies
+# Install dependencies (includes Puppeteer which downloads Chromium)
 npm install
 
 # Build the project
@@ -51,35 +53,39 @@ edh-deck-challenge <your-moxfield-username>
 ### Example
 
 ```bash
-node dist/index.js ArcaineAcademy
+node dist/index.js mainframe
 ```
 
 This will:
-1. Fetch all public Commander decks for the given Moxfield user
-2. Print an ASCII progress chart to your terminal
-3. Write an HTML file (`<username>-edh-challenge.html`) to your current directory
+1. Launch a headless browser to get past Cloudflare protection
+2. Fetch all public Commander decks for the given Moxfield user
+3. Print an ASCII progress chart to your terminal
+4. Write an HTML file (`<username>-edh-challenge.html`) to your current directory
 
 ### Example ASCII Output
 
 ```
 ═══════════════════════════════════════════════════
-  EDH 32 Deck Challenge - ArcaineAcademy
+  EDH 32 Deck Challenge - mainframe
 ═══════════════════════════════════════════════════
 
-── Colorless ──────────────────────────────────────
-  Colorless : Kozilek, the Great Distortion
+── Colorless ─────────────────────────────────────
+  Colorless : [empty]
 
-── Mono Color ─────────────────────────────────────
-  Mono White : Giada, Font of Hope
-  Mono Blue  : [empty]
-  Mono Black : [empty]
-  Mono Red   : Krenko, Mob Boss
-  Mono Green : [empty]
+── Mono Color ────────────────────────────────────
+  Mono White : Cloud, Midgar Mercenary
+  Mono Blue  : Thassa, Deep-Dwelling
+  Mono Black : Liliana, Heretical Healer // L...
+  Mono Red   : Clive, Ifrit's Dominant // Ifr...
+  Mono Green : Tifa Lockhart
 
-...
+── Two Color ─────────────────────────────────────
+  Azorius (WU)  : [empty]
+  Orzhov (WB)   : Teysa Karlov
+  ...
 
 ═══════════════════════════════════════════════════
-  Progress: 5/32 slots filled
+  Progress: 17/32 slots filled
 ═══════════════════════════════════════════════════
 ```
 
@@ -107,7 +113,8 @@ src/
 ├── types.ts                    # Shared TypeScript interfaces
 ├── validator.ts                # Username input validation
 ├── api/
-│   └── moxfield-client.ts     # Moxfield API client (fetch + pagination)
+│   ├── moxfield-client.ts     # Direct fetch client (types + errors)
+│   └── browser-client.ts      # Puppeteer-based client (Cloudflare bypass)
 ├── domain/
 │   ├── color-combinations.ts   # 32 color slot definitions
 │   ├── color-identity.ts       # Color identity resolution
@@ -137,6 +144,14 @@ The project uses a combination of:
 - **Property-based tests** (fast-check) to verify invariants like WUBRG sort order, slot mapping bijection, and name truncation bounds
 - **Integration tests** that exercise the full pipeline with mocked API responses
 
+## How It Works
+
+1. **Cloudflare Bypass** — Launches a headless Chrome instance via Puppeteer, navigates to moxfield.com to solve the Cloudflare challenge and obtain valid session cookies
+2. **Deck Fetching** — Uses the browser context to call Moxfield's search API (`/v2/decks/search?authorUserNames=...&fmt=commander`) which returns all commander decks for the user
+3. **Detail Fetching** — Fetches full deck data (`/v2/decks/all/{id}`) for each deck to get commander card information
+4. **Color Resolution** — Extracts commander(s) from each deck, computes the combined color identity (union for partners), and maps to one of 32 slots
+5. **Rendering** — Produces both an ASCII diagram (stdout) and a standalone HTML file with card art
+
 ## Error Handling
 
 | Condition | Message | Exit Code |
@@ -152,9 +167,10 @@ The project uses a combination of:
 ## Tech Stack
 
 - **TypeScript** 7.x — strict mode, ES modules
+- **Puppeteer** — headless Chrome for Cloudflare bypass
 - **Vitest** — test runner
 - **fast-check** — property-based testing
-- **Node.js native fetch** — HTTP client (no axios/node-fetch needed)
+- **Node.js native fetch** — HTTP client (used within browser context)
 
 ---
 

@@ -7,13 +7,15 @@
  * resolve identities → organize → render ASCII → render HTML
  */
 
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { validateUsername } from './validator.js';
 import {
-  createMoxfieldClient,
   MoxfieldUserNotFoundError,
   MoxfieldAPIError,
   MoxfieldTimeoutError,
 } from './api/moxfield-client.js';
+import { createBrowserClient } from './api/browser-client.js';
 import { extractCommanders } from './domain/commander-extractor.js';
 import { organizeDecks } from './domain/deck-organizer.js';
 import { renderASCII } from './renderers/ascii-renderer.js';
@@ -32,21 +34,34 @@ async function main(): Promise<void> {
 
   const { username } = validation;
 
-  // 3. Create Moxfield client
-  const client = createMoxfieldClient({
-    baseUrl: 'https://api2.moxfield.com/v2',
-    timeoutMs: 30000,
-    userAgent: 'edh-deck-challenge-checker/1.0',
-  });
+  // 3. Create browser-based Moxfield client (handles Cloudflare)
+  let client: Awaited<ReturnType<typeof createBrowserClient>>;
+  try {
+    client = await createBrowserClient({
+      baseUrl: 'https://api2.moxfield.com/v2',
+      timeoutMs: 60000,
+      headless: true,
+    });
+  } catch (error: unknown) {
+    if (error instanceof MoxfieldTimeoutError) {
+      console.error('Error: Could not reach Moxfield. The service may be temporarily unavailable.');
+    } else {
+      console.error('Error: Failed to launch browser. Make sure Chrome/Chromium is available.');
+    }
+    process.exit(1);
+  }
 
   try {
     // 4. Fetch user decks
+    console.error(`Fetching decks for "${username}"...`);
     const deckSummaries = await client.fetchUserDecks(username);
 
     if (deckSummaries.length === 0) {
       console.error(`No public decks found for user "${username}".`);
       process.exit(1);
     }
+
+    console.error(`Found ${deckSummaries.length} Commander deck(s). Fetching details...`);
 
     // 5. Fetch detail for each deck sequentially
     const deckDetails = [];
@@ -72,8 +87,10 @@ async function main(): Promise<void> {
     const asciiOutput = renderASCII(progress);
     console.log(asciiOutput);
 
-    // 10. Render HTML file to cwd
-    const htmlPath = renderHTML(progress, { outputDir: process.cwd() });
+    // 10. Render HTML file to build/ directory
+    const buildDir = join(import.meta.dirname, '..', 'build');
+    mkdirSync(buildDir, { recursive: true });
+    const htmlPath = renderHTML(progress, { outputDir: buildDir });
     console.log(`\nHTML output written to: ${htmlPath}`);
   } catch (error: unknown) {
     if (error instanceof MoxfieldUserNotFoundError) {
@@ -102,6 +119,8 @@ async function main(): Promise<void> {
       console.error('An unexpected error occurred.');
     }
     process.exit(1);
+  } finally {
+    await client.close();
   }
 }
 

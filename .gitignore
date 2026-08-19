@@ -1,3 +1,5 @@
 .kiro/
 node_modules/
 dist/
+build/
+.DS_STORE
