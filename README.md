@@ -1,1 +1,169 @@
-#Moxfield User 32 Deck Challenege Checker
+# 🃏 EDH 32 Deck Challenge Checker
+
+A CLI tool that connects to your [Moxfield](https://www.moxfield.com) account, scans your Commander/EDH decks, and maps them to all 32 possible color identity slots — showing your progress toward the EDH 32 Deck Challenge.
+
+Produces both an ASCII terminal diagram and a self-contained HTML file with commander card art.
+
+---
+
+## Features
+
+- Fetches all your public Commander decks from Moxfield (handles pagination)
+- Identifies commanders and resolves color identity (supports partner commanders)
+- Maps decks to all 32 color combination slots (colorless through 5-color)
+- Renders a formatted ASCII progress chart to the terminal
+- Generates a standalone HTML file with commander card images and dark theme
+- Handles errors gracefully (user not found, timeouts, API errors)
+
+## Prerequisites
+
+- **Node.js** 18 or later (uses native `fetch`)
+- **npm** 7 or later
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/rach0022/edh-deck-challenge.git
+cd edh-deck-challenge
+
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+```
+
+## Usage
+
+```bash
+# Run directly with node
+node dist/index.js <your-moxfield-username>
+
+# Or use npm start
+npm start -- <your-moxfield-username>
+
+# Or link globally and run anywhere
+npm link
+edh-deck-challenge <your-moxfield-username>
+```
+
+### Example
+
+```bash
+node dist/index.js ArcaineAcademy
+```
+
+This will:
+1. Fetch all public Commander decks for the given Moxfield user
+2. Print an ASCII progress chart to your terminal
+3. Write an HTML file (`<username>-edh-challenge.html`) to your current directory
+
+### Example ASCII Output
+
+```
+═══════════════════════════════════════════════════
+  EDH 32 Deck Challenge - ArcaineAcademy
+═══════════════════════════════════════════════════
+
+── Colorless ──────────────────────────────────────
+  Colorless : Kozilek, the Great Distortion
+
+── Mono Color ─────────────────────────────────────
+  Mono White : Giada, Font of Hope
+  Mono Blue  : [empty]
+  Mono Black : [empty]
+  Mono Red   : Krenko, Mob Boss
+  Mono Green : [empty]
+
+...
+
+═══════════════════════════════════════════════════
+  Progress: 5/32 slots filled
+═══════════════════════════════════════════════════
+```
+
+## Development
+
+```bash
+# Run tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Type-check without emitting
+npx tsc --noEmit
+
+# Build
+npm run build
+```
+
+### Project Structure
+
+```
+src/
+├── index.ts                    # CLI entry point & pipeline orchestrator
+├── types.ts                    # Shared TypeScript interfaces
+├── validator.ts                # Username input validation
+├── api/
+│   └── moxfield-client.ts     # Moxfield API client (fetch + pagination)
+├── domain/
+│   ├── color-combinations.ts   # 32 color slot definitions
+│   ├── color-identity.ts       # Color identity resolution
+│   ├── commander-extractor.ts  # Commander extraction from deck data
+│   └── deck-organizer.ts       # Maps decks to color slots
+└── renderers/
+    ├── ascii-renderer.ts       # Terminal ASCII output
+    └── html-renderer.ts        # Self-contained HTML generator
+
+tests/
+├── validator.test.ts
+├── validator.property.test.ts
+├── moxfield-client.test.ts
+├── commander-extractor.test.ts
+├── color-identity.property.test.ts
+├── deck-organizer.property.test.ts
+├── ascii-renderer.test.ts
+├── ascii-renderer.property.test.ts
+├── html-renderer.test.ts
+└── integration.test.ts
+```
+
+### Testing Approach
+
+The project uses a combination of:
+- **Unit tests** (vitest) for each module
+- **Property-based tests** (fast-check) to verify invariants like WUBRG sort order, slot mapping bijection, and name truncation bounds
+- **Integration tests** that exercise the full pipeline with mocked API responses
+
+## Error Handling
+
+| Condition | Message | Exit Code |
+|---|---|---|
+| No username argument | `Usage: edh-challenge <moxfield-username>` | 1 |
+| Empty/whitespace username | `Error: Username is invalid...` | 1 |
+| User not found (404) | `Error: Moxfield user "X" not found.` | 1 |
+| API error (non-404) | `Error: Moxfield API returned an error (status)...` | 1 |
+| Connection timeout | `Error: Could not reach Moxfield...` | 1 |
+| No public decks | `No public decks found for user "X".` | 1 |
+| Deck has no commander | Skipped (logged to stderr), continues | — |
+
+## Tech Stack
+
+- **TypeScript** 7.x — strict mode, ES modules
+- **Vitest** — test runner
+- **fast-check** — property-based testing
+- **Node.js native fetch** — HTTP client (no axios/node-fetch needed)
+
+---
+
+## 🤖 AI Disclaimer
+
+This project was built entirely with [Kiro](https://kiro.dev), an AI-powered development environment by Amazon. The code, tests, specs, and this README were generated using **Claude Sonnet 4** (Anthropic) as the underlying model, orchestrated through Kiro's spec-driven workflow (requirements → design → tasks → implementation).
+
+No code was manually written — this serves as a demonstration of AI-assisted software development with spec-first methodology and property-based testing.
+
+## License
+
+ISC

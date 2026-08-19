@@ -1,0 +1,33 @@
+{
+  "name": "edh-deck-challenge",
+  "version": "1.0.0",
+  "description": "EDH 32 Deck Challenge Checker - Track your Commander deck building progress",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "edh-deck-challenge": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rach0022/edh-deck-challenge.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rach0022/edh-deck-challenge/issues"
+  },
+  "homepage": "https://github.com/rach0022/edh-deck-challenge#readme",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "fast-check": "^4.9.0",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}
