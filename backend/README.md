@@ -30,233 +30,233 @@ No auth. No database. No sign-up. Just enter a username and go.
 ### High-Level System Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          Browser (User)                              │
-└───────────────────────────────┬─────────────────────────────────────┘
-                                │
-                    HTTP Request (GET /challenge/:username)
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Hono Server (:3000)                          │
-│                                                                     │
-│  ┌──────────────┐  ┌───────────────────┐  ┌─────────────────────┐  │
-│  │  Middleware   │  │   Page Routes     │  │    API Routes       │  │
-│  │  • Logger     │  │   • GET /         │  │    • GET /api/...   │  │
-│  │  • CORS       │  │   • GET /challenge│  │    • POST /api/...  │  │
-│  │              │  │   • GET /deck     │  │                     │  │
-│  └──────────────┘  └────────┬──────────┘  └──────────┬──────────┘  │
-│                             │                        │              │
-│                             ▼                        ▼              │
-│                    ┌─────────────────────────────────────┐          │
-│                    │        Challenge Service            │          │
-│                    │  (orchestration + business logic)   │          │
-│                    └──────────┬──────────────────────────┘          │
-│                               │                                     │
-│              ┌────────────────┼────────────────────┐                │
-│              ▼                ▼                    ▼                 │
-│  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐   │
-│  │ Cache Service  │  │  Spellbook     │  │  Moxfield Service   │   │
-│  │               │  │  Service       │  │                     │   │
-│  │ • Upstash     │  │ • REST API     │  │  • Puppeteer        │   │
-│  │ • ioredis     │  │ • find-my-     │  │  • Cloudflare       │   │
-│  │ • In-memory   │  │   combos       │  │    bypass           │   │
-│  └────────────────┘  └───────┬────────┘  └──────────┬──────────┘   │
-│                              │                      │               │
-└──────────────────────────────┼──────────────────────┼───────────────┘
-                               │                      │
-                               ▼                      │
-                ┌──────────────────────────┐          │
-                │  Commander Spellbook API  │   Headless Chrome
-                │  (Public REST - no auth)  │   (Puppeteer)
-                └──────────────────────────┘          │
-                                                      ▼
-                                       ┌─────────────────────────┐
-                                       │    Moxfield API (v2)     │
-                                       │  (behind Cloudflare WAF) │
-                                       └─────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                            Browser (User)                                 │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │
+                       HTTP Request (GET /challenge/:username)
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           Hono Server (:3000)                             │
+│                                                                          │
+│  ┌───────────────┐  ┌────────────────────┐  ┌────────────────────────┐  │
+│  │  Middleware    │  │   Page Routes      │  │    API Routes          │  │
+│  │  • Logger      │  │   • GET /          │  │    • GET /api/...      │  │
+│  │  • CORS        │  │   • GET /challenge │  │    • POST /api/...     │  │
+│  │               │  │   • GET /deck      │  │                        │  │
+│  └───────────────┘  └─────────┬──────────┘  └───────────┬────────────┘  │
+│                               │                         │                │
+│                               ▼                         ▼                │
+│                    ┌──────────────────────────────────────────┐          │
+│                    │          Challenge Service               │          │
+│                    │    (orchestration + business logic)      │          │
+│                    └──────────────────┬───────────────────────┘          │
+│                                       │                                  │
+│              ┌────────────────────────┼─────────────────────┐            │
+│              ▼                        ▼                     ▼            │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
+│  │  Cache Service    │  │ Spellbook Service│  │  Moxfield Service    │  │
+│  │                  │  │                  │  │                      │  │
+│  │  • Upstash (HTTP)│  │  • REST API      │  │  • Puppeteer browser │  │
+│  │  • ioredis (TCP) │  │  • find-my-combos│  │  • Cloudflare bypass │  │
+│  │  • In-memory     │  │                  │  │  • API fetching      │  │
+│  └──────────────────┘  └────────┬─────────┘  └───────────┬──────────┘  │
+│                                 │                         │              │
+└─────────────────────────────────┼─────────────────────────┼──────────────┘
+                                  │                         │
+                                  ▼                         │
+                   ┌────────────────────────────┐    Headless Chrome
+                   │  Commander Spellbook API    │    (Puppeteer)
+                   │  (Public REST — no auth)    │           │
+                   └────────────────────────────┘           │
+                                                            ▼
+                                             ┌────────────────────────────┐
+                                             │     Moxfield API (v2)      │
+                                             │  (behind Cloudflare WAF)   │
+                                             └────────────────────────────┘
 ```
 
 ### Entity Relationship & Data Flow Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         ENTITY & DATA FLOW DIAGRAM                           │
-│                                                                             │
-│  Shows how entities flow between external APIs → services → views           │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       ENTITY & DATA FLOW DIAGRAM                        │
+│                                                                         │
+│  Shows how entities flow between external APIs → services → views       │
+└─────────────────────────────────────────────────────────────────────────┘
 
-                    ┌─────────────────────────────┐
-                    │       MOXFIELD API (v2)      │
-                    │  api2.moxfield.com           │
-                    ├─────────────────────────────┤
-                    │                             │
-                    │  GET /v1/users/:username     │
-                    │    → Validates user exists   │
-                    │                             │
-                    │  GET /v2/decks/search        │
-                    │    → MoxfieldDeckSummary[]   │
-                    │    {publicId, name, format}  │
-                    │                             │
-                    │  GET /v2/decks/all/:id       │
-                    │    → MoxfieldDeckDetail      │
-                    │    {commanders, mainboard}   │
-                    │                             │
-                    └──────────────┬──────────────┘
-                                   │
-                                   │ Puppeteer (headless Chrome)
-                                   │ page.evaluate(fetch(...))
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        MOXFIELD SERVICE                                    │
-│  services/moxfield.ts                                                    │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  fetchUserDecks(username)  → MoxfieldDeckSummary[]                       │
-│    • Paginated (100/page), filtered to fmt=commander                     │
-│                                                                          │
-│  fetchDeckDetail(publicId) → MoxfieldDeckDetail                          │
-│    • Full deck: commanders + mainboard (Record<string, CardEntry>)       │
-│    • Each CardEntry: { quantity, card: MoxfieldCard }                    │
-│    • MoxfieldCard: { name, color_identity[], type_line, mana_cost, ... } │
-│                                                                          │
-└──────────────────────────────────┬───────────────────────────────────────┘
-                                   │
-                                   │ MoxfieldDeckDetail[]
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        CHALLENGE SERVICE                                   │
-│  services/challenge.ts — ORCHESTRATION LAYER                             │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐     │
-│  │  fetchAndProcessChallenge(username)                             │     │
-│  │                                                                 │     │
-│  │  1. Fetch all decks → MoxfieldDeckDetail[]                      │     │
-│  │  2. Extract commanders for each deck                            │     │
-│  │  3. Organize into 32 color slots                                │     │
-│  │  4. Fetch combo counts (parallel) via Spellbook Service         │     │
-│  │  5. Attach comboCount to each DeckSlotEntry                     │     │
-│  │  6. Build summary stats → ChallengeResponse                    │     │
-│  └─────────────────────────────────────────────────────────────────┘     │
-│                                                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐     │
-│  │  getDeckDetail(deckId)                                          │     │
-│  │                                                                 │     │
-│  │  1. Fetch deck detail (cache or Moxfield)                       │     │
-│  │  2. Build card groups by type                                   │     │
-│  │  3. Fetch combos via Spellbook Service                          │     │
-│  │  4. Attach DeckCombosData → DeckDetailResponse                  │     │
-│  └─────────────────────────────────────────────────────────────────┘     │
-│                                                                          │
-└───────────────┬──────────────────────────────────┬───────────────────────┘
-                │                                  │
-                │ Card names from deck             │ ChallengeResponse /
-                ▼                                  │ DeckDetailResponse
-┌───────────────────────────────────┐              │
-│    COMMANDER SPELLBOOK API        │              │
-│    backend.commanderspellbook.com │              │
-├───────────────────────────────────┤              │
-│                                   │              │
-│  POST /find-my-combos             │              │
-│                                   │              │
-│  Request Body:                    │              │
-│  {                                │              │
-│    "commanders": [                │              │
-│      {"card": "Thrasios..."},     │              │
-│      {"card": "Tymna..."}         │              │
-│    ],                             │              │
-│    "main": [                      │              │
-│      {"card": "Sol Ring"},        │              │
-│      {"card": "Hullbreaker..."},  │              │
-│      ...all mainboard cards       │              │
-│    ]                              │              │
-│  }                                │              │
-│                                   │              │
-│  Response:                        │              │
-│  {                                │              │
-│    "results": {                   │              │
-│      "identity": "BGU",           │              │
-│      "included": [                │              │
-│        {                          │              │
-│          "id": "513-5034--46",    │              │
-│          "uses": [...cards],      │              │
-│          "produces": [            │              │
-│            {"feature": {          │              │
-│              "name": "Infinite    │              │
-│               colorless mana"     │              │
-│            }}                      │              │
-│          ],                       │              │
-│          "description": "...",    │              │
-│          "bracketTag": "E"        │              │
-│        }                          │              │
-│      ],                           │              │
-│      "almostIncluded": [...]      │              │
-│    }                              │              │
-│  }                                │              │
-│                                   │              │
-└───────────────┬───────────────────┘              │
-                │                                  │
-                │ SpellbookCombo[]                  │
-                ▼                                  ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        SPELLBOOK SERVICE                                   │
-│  services/spellbook.ts                                                   │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  findCombosForDeck(deck: MoxfieldDeckDetail) → DeckCombosData            │
-│                                                                          │
-│  1. Extract commander names from deck.commanders                         │
-│  2. Extract mainboard card names from deck.mainboard                     │
-│  3. POST to /find-my-combos with all card names                          │
-│  4. Transform raw API variants → SpellbookCombo[]                        │
-│  5. Return { comboCount, combos[] }                                      │
-│                                                                          │
-│  SpellbookCombo shape:                                                   │
-│  {                                                                       │
-│    id, cards[], produces[], requires[],                                   │
-│    description, identity, popularity,                                    │
-│    prices, cardCount, bracketTag,                                        │
-│    easyPrerequisites, spellbookUrl                                       │
-│  }                                                                       │
-│                                                                          │
-│  Error handling: returns { comboCount: 0, combos: [] } on failure        │
-│  (non-blocking — Spellbook is a nice-to-have, not critical path)         │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+                    ┌───────────────────────────────┐
+                    │       MOXFIELD API (v2)        │
+                    │  api2.moxfield.com             │
+                    ├───────────────────────────────┤
+                    │                               │
+                    │  GET /v1/users/:username       │
+                    │    → Validates user exists     │
+                    │                               │
+                    │  GET /v2/decks/search          │
+                    │    → MoxfieldDeckSummary[]     │
+                    │    {publicId, name, format}    │
+                    │                               │
+                    │  GET /v2/decks/all/:id         │
+                    │    → MoxfieldDeckDetail        │
+                    │    {commanders, mainboard}     │
+                    │                               │
+                    └───────────────┬───────────────┘
+                                    │
+                                    │ Puppeteer (headless Chrome)
+                                    │ page.evaluate(fetch(...))
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  MOXFIELD SERVICE                                                       │
+│  services/moxfield.ts                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  fetchUserDecks(username)  → MoxfieldDeckSummary[]                      │
+│    • Paginated (100/page), filtered to fmt=commander                    │
+│                                                                         │
+│  fetchDeckDetail(publicId) → MoxfieldDeckDetail                         │
+│    • Full deck: commanders + mainboard (Record<string, CardEntry>)      │
+│    • Each CardEntry: { quantity, card: MoxfieldCard }                   │
+│    • MoxfieldCard: { name, color_identity[], type_line, mana_cost }     │
+│                                                                         │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     │ MoxfieldDeckDetail[]
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  CHALLENGE SERVICE                                                      │
+│  services/challenge.ts — ORCHESTRATION LAYER                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │  fetchAndProcessChallenge(username)                               │  │
+│  │                                                                   │  │
+│  │  1. Fetch all decks → MoxfieldDeckDetail[]                        │  │
+│  │  2. Extract commanders for each deck                              │  │
+│  │  3. Organize into 32 color slots                                  │  │
+│  │  4. Fetch combo counts (parallel) via Spellbook Service           │  │
+│  │  5. Attach comboCount to each DeckSlotEntry                       │  │
+│  │  6. Build summary stats → ChallengeResponse                      │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │  getDeckDetail(deckId)                                            │  │
+│  │                                                                   │  │
+│  │  1. Fetch deck detail (cache or Moxfield)                         │  │
+│  │  2. Build card groups by type                                     │  │
+│  │  3. Fetch combos via Spellbook Service                            │  │
+│  │  4. Attach DeckCombosData → DeckDetailResponse                    │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└───────────────┬─────────────────────────────────────┬───────────────────┘
+                │                                     │
+                │ Card names from deck                │ ChallengeResponse /
+                ▼                                     │ DeckDetailResponse
+┌─────────────────────────────────────┐               │
+│  COMMANDER SPELLBOOK API            │               │
+│  backend.commanderspellbook.com     │               │
+├─────────────────────────────────────┤               │
+│                                     │               │
+│  POST /find-my-combos               │               │
+│                                     │               │
+│  Request Body:                      │               │
+│  {                                  │               │
+│    "commanders": [                  │               │
+│      {"card": "Thrasios..."},       │               │
+│      {"card": "Tymna..."}           │               │
+│    ],                               │               │
+│    "main": [                        │               │
+│      {"card": "Sol Ring"},          │               │
+│      {"card": "Hullbreaker..."},    │               │
+│      ...all mainboard cards         │               │
+│    ]                                │               │
+│  }                                  │               │
+│                                     │               │
+│  Response:                          │               │
+│  {                                  │               │
+│    "results": {                     │               │
+│      "identity": "BGU",             │               │
+│      "included": [                  │               │
+│        {                            │               │
+│          "id": "513-5034--46",      │               │
+│          "uses": [...cards],        │               │
+│          "produces": [              │               │
+│            {"feature": {            │               │
+│              "name": "Infinite      │               │
+│               colorless mana"       │               │
+│            }}                        │               │
+│          ],                         │               │
+│          "description": "...",      │               │
+│          "bracketTag": "E"          │               │
+│        }                            │               │
+│      ],                             │               │
+│      "almostIncluded": [...]        │               │
+│    }                                │               │
+│  }                                  │               │
+│                                     │               │
+└───────────────┬─────────────────────┘               │
+                │                                     │
+                │ SpellbookCombo[]                     │
+                ▼                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  SPELLBOOK SERVICE                                                      │
+│  services/spellbook.ts                                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  findCombosForDeck(deck: MoxfieldDeckDetail) → DeckCombosData           │
+│                                                                         │
+│  1. Extract commander names from deck.commanders                        │
+│  2. Extract mainboard card names from deck.mainboard                    │
+│  3. POST to /find-my-combos with all card names                         │
+│  4. Transform raw API variants → SpellbookCombo[]                       │
+│  5. Return { comboCount, combos[] }                                     │
+│                                                                         │
+│  SpellbookCombo shape:                                                  │
+│  {                                                                      │
+│    id, cards[], produces[], requires[],                                  │
+│    description, identity, popularity,                                   │
+│    prices, cardCount, bracketTag,                                       │
+│    easyPrerequisites, spellbookUrl                                      │
+│  }                                                                      │
+│                                                                         │
+│  Error handling: returns { comboCount: 0, combos: [] } on failure       │
+│  (non-blocking — Spellbook is a nice-to-have, not critical path)        │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 
-                                   │
-                                   │ DeckDetailResponse (with combos)
-                                   │ ChallengeResponse (with comboCount)
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          SSR VIEWS (Hono JSX)                              │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ChallengePage (views/challenge.tsx)                                      │
-│  ├── Progress bar (percentage)                                           │
-│  ├── Category sections (colorless → 5-color)                             │
-│  │   └── SlotCard for each of 32 slots                                   │
-│  │       ├── Commander art (Scryfall art_crop)                           │
-│  │       ├── Multi-deck badge (if >1 deck)                               │
-│  │       ├── ♾️ Combo count badge (if comboCount > 0)  ← NEW             │
-│  │       └── Deck info carousel (CSS animation)                          │
-│  └── Skipped decks list                                                  │
-│                                                                          │
-│  DeckDetailPage (views/deck-detail.tsx)                                   │
-│  ├── Commander card images                                               │
-│  ├── Color identity + metadata                                           │
-│  ├── ♾️ Combos Section (if combos found)              ← NEW              │
-│  │   └── ComboCard for each combo                                        │
-│  │       ├── Card names (highlighted)                                    │
-│  │       ├── Produces badges ("Infinite mana", etc.)                     │
-│  │       ├── Bracket tag                                                 │
-│  │       ├── Step-by-step description                                    │
-│  │       ├── Card thumbnail images                                       │
-│  │       └── Link to Commander Spellbook                                 │
-│  └── Decklist (cards grouped by type)                                    │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ DeckDetailResponse (with combos)
+                                     │ ChallengeResponse (with comboCount)
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  SSR VIEWS (Hono JSX)                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ChallengePage (views/challenge.tsx)                                     │
+│  ├── Progress bar (percentage)                                          │
+│  ├── Category sections (colorless → 5-color)                            │
+│  │   └── SlotCard for each of 32 slots                                  │
+│  │       ├── Commander art (Scryfall art_crop)                          │
+│  │       ├── Multi-deck badge (if >1 deck)                              │
+│  │       ├── ♾️ Combo count badge (if comboCount > 0)  ← NEW            │
+│  │       └── Deck info carousel (CSS animation)                         │
+│  └── Skipped decks list                                                 │
+│                                                                         │
+│  DeckDetailPage (views/deck-detail.tsx)                                  │
+│  ├── Commander card images                                              │
+│  ├── Color identity + metadata                                          │
+│  ├── ♾️ Combos Section (if combos found)              ← NEW             │
+│  │   └── ComboCard for each combo                                       │
+│  │       ├── Card names (highlighted)                                   │
+│  │       ├── Produces badges ("Infinite mana", etc.)                    │
+│  │       ├── Bracket tag                                                │
+│  │       ├── Step-by-step description                                   │
+│  │       ├── Card thumbnail images                                      │
+│  │       └── Link to Commander Spellbook                                │
+│  └── Decklist (cards grouped by type)                                   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Request Flow — Challenge Lookup
@@ -429,34 +429,34 @@ Groups are output in the canonical order shown above.
 ### Cache Strategy
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Cache Layer                         │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  Key Pattern:                                       │
-│    edh:challenge:{username}  → ChallengeResponse    │
-│    edh:deck:{publicId}       → MoxfieldDeckDetail   │
-│    edh:combos:{publicId}     → DeckCombosData       │
-│                                                     │
-│  TTL: 900 seconds (15 minutes) by default           │
-│                                                     │
-│  Driver Selection (priority):                       │
-│    1. Explicit CACHE_DRIVER env var                  │
-│    2. Auto-detect from credentials:                 │
-│       • UPSTASH_REDIS_REST_URL set → upstash        │
-│       • REDIS_URL set → ioredis                     │
-│       • Neither → in-memory                         │
-│                                                     │
-│  Behavior:                                          │
-│    • GET /challenge/:user → checks challenge cache  │
-│    • On MISS → fetches all decks, caches each       │
-│    • On MISS → fetches combos for each deck         │
-│    • POST /refresh/:user → deletes + re-fetches     │
-│    • Individual deck details cached separately      │
-│    • Individual combo data cached separately         │
-│    • Combo cache checked before Spellbook API call  │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                     Cache Layer                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Key Pattern:                                           │
+│    edh:challenge:{username}  → ChallengeResponse        │
+│    edh:deck:{publicId}       → MoxfieldDeckDetail       │
+│    edh:combos:{publicId}     → DeckCombosData           │
+│                                                         │
+│  TTL: 900 seconds (15 minutes) by default               │
+│                                                         │
+│  Driver Selection (priority):                           │
+│    1. Explicit CACHE_DRIVER env var                      │
+│    2. Auto-detect from credentials:                     │
+│       • UPSTASH_REDIS_REST_URL set → upstash            │
+│       • REDIS_URL set → ioredis                         │
+│       • Neither → in-memory                             │
+│                                                         │
+│  Behavior:                                              │
+│    • GET /challenge/:user → checks challenge cache      │
+│    • On MISS → fetches all decks, caches each           │
+│    • On MISS → fetches combos for each deck             │
+│    • POST /refresh/:user → deletes + re-fetches         │
+│    • Individual deck details cached separately          │
+│    • Individual combo data cached separately            │
+│    • Combo cache checked before Spellbook API call      │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### Puppeteer / Cloudflare Bypass Flow
@@ -484,7 +484,7 @@ Shutdown:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                COMBO DETECTION ALGORITHM                                  │
+│              COMBO DETECTION ALGORITHM                                   │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  Input: MoxfieldDeckDetail                                              │
