@@ -1,0 +1,31 @@
+# ─── Render Blueprint — EDH Deck Challenge ──────────────────────────────────
+# Deploy: connect your GitHub repo on render.com, this file auto-configures.
+# Free tier: 750 hrs/month, spins down after 15 min inactivity.
+#
+# Pair with Upstash Redis free tier (10k commands/day) for caching.
+# Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in the Render dashboard.
+
+services:
+  - type: web
+    name: edh-deck-challenge
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: NODE_ENV
+        value: production
+      - key: CACHE_DRIVER
+        value: upstash
+      - key: PUPPETEER_HEADLESS
+        value: "true"
+      - key: CACHE_TTL_SECONDS
+        value: "900"
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false  # Set manually in dashboard
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false  # Set manually in dashboard

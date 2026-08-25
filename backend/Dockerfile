@@ -1,8 +1,8 @@
 # ─── EDH Deck Challenge API ──────────────────────────────────────────────────
-# Multi-stage build for Render (free tier) or any Docker host.
+# Multi-stage build for Render / Railway / Fly.io (free tier) or any Docker host.
 # Uses Puppeteer with system Chromium to keep the image smaller.
 
-FROM node:22-slim AS base
+FROM node:26-slim AS base
 
 # Install Chromium and dependencies for Puppeteer
 RUN apt-get update && apt-get install -y \
@@ -54,10 +54,19 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 
+# Puppeteer needs a writable home directory for browser profile
+ENV HOME=/tmp
+
 # Run as non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -g appuser -d /tmp appuser
 USER appuser
 
+# Default port (overridable via PORT env var)
+ENV PORT=3000
 EXPOSE 3000
+
+# Health check for container orchestrators
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 CMD ["node", "dist/index.js"]
