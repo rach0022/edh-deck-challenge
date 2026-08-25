@@ -41,6 +41,8 @@ export function Layout({ title, children }: LayoutProps) {
           <p>
             Powered by <a href="https://www.moxfield.com" target="_blank" rel="noopener">Moxfield</a>
             {' • '}
+            Combos by <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a>
+            {' • '}
             Built with <a href="https://hono.dev" target="_blank" rel="noopener">Hono</a>
             {' • '}
             <a href="https://github.com/rach0022/edh-deck-challenge" target="_blank" rel="noopener">Source</a>
@@ -755,6 +757,159 @@ const css = `
     height: 16px;
   }
 
+  /* ─── Combos Section ────────────────────── */
+
+  .combos-section {
+    border-top: 1px solid var(--glass-border);
+    padding-top: 2rem;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .combos-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .combo-card {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem 2rem;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .combo-card:hover {
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 4px 24px rgba(168, 85, 247, 0.1);
+  }
+
+  .combo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .combo-cards-list {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .combo-card-name {
+    color: var(--accent-green);
+  }
+
+  .combo-template {
+    color: var(--text-muted);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .combo-tags {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .combo-bracket-tag {
+    background: rgba(168, 85, 247, 0.2);
+    color: var(--accent-purple);
+    padding: 2px 10px;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .combo-link {
+    font-size: 0.8rem;
+    color: var(--accent-green);
+    white-space: nowrap;
+  }
+
+  .combo-produces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .combo-feature-badge {
+    background: rgba(52, 211, 153, 0.12);
+    color: var(--accent-green);
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid rgba(52, 211, 153, 0.25);
+  }
+
+  .combo-prereqs {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .combo-description {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+  }
+
+  .combo-description p {
+    margin-bottom: 0.25rem;
+  }
+
+  .combo-description p:last-child {
+    margin-bottom: 0;
+  }
+
+  .combo-card-images {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .combo-card-img {
+    width: 100px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+  }
+
+  .combo-card-img:hover {
+    transform: scale(1.08);
+  }
+
+  .combo-count-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(168, 85, 247, 0.85);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 100px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    z-index: 2;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
   /* ─── Responsive ────────────────────────── */
 
   @media (max-width: 768px) {
@@ -767,5 +922,8 @@ const css = `
     .decklist-grid { grid-template-columns: 1fr; }
     .header-inner { padding: 0.75rem 1rem; }
     .bg-glow { display: none; }
+    .combo-header { flex-direction: column; }
+    .combo-card-images { gap: 0.5rem; }
+    .combo-card-img { width: 80px; }
   }
 `;

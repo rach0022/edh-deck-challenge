@@ -89,6 +89,7 @@ export interface DeckSlotEntry {
   commanderNames: string[];
   commanderImages: (string | null)[];
   commanders: CommanderSlotInfo[];
+  comboCount?: number;
 }
 
 export interface ColorSlot {
@@ -153,6 +154,7 @@ export interface DeckDetailResponse {
   moxfieldUrl: string;
   cardCount: number;
   cardsByType: CardTypeGroup[];
+  combos?: DeckCombosData;
 }
 
 export interface CardTypeGroup {
@@ -170,4 +172,82 @@ export interface DeckCardInfo {
   setCode: string;
   collectorNumber: string;
   imageUrl: string | null;
+}
+
+// ─── Commander Spellbook types ──────────────────────────────────────────────
+
+/** POST body item for the find-my-combos endpoint */
+export interface SpellbookCardInput {
+  card: string;
+}
+
+/** POST body for the find-my-combos endpoint */
+export interface SpellbookFindCombosRequest {
+  commanders: SpellbookCardInput[];
+  main: SpellbookCardInput[];
+}
+
+/** A card used in a combo (from Spellbook API response) */
+export interface SpellbookComboCard {
+  id: number;
+  name: string;
+  typeLine: string;
+  imageUriFrontNormal: string | null;
+  imageUriFrontSmall: string | null;
+}
+
+/** A feature (result) produced by a combo */
+export interface SpellbookComboFeature {
+  id: number;
+  name: string;
+}
+
+/** A template requirement (generic card slot) */
+export interface SpellbookComboTemplate {
+  id: number;
+  name: string;
+}
+
+/** A single combo variant from Spellbook */
+export interface SpellbookCombo {
+  id: string;
+  /** Cards used in this combo */
+  cards: SpellbookComboCard[];
+  /** Results/features this combo produces */
+  produces: SpellbookComboFeature[];
+  /** Template requirements (e.g. "Permanent Castable for {C}") */
+  requires: SpellbookComboTemplate[];
+  /** Step-by-step description of how the combo works */
+  description: string;
+  /** Color identity of the combo */
+  identity: string;
+  /** Popularity score */
+  popularity: number;
+  /** Price info */
+  prices: { tcgplayer?: string; cardmarket?: string; cardkingdom?: string };
+  /** Number of cards in the combo */
+  cardCount: number;
+  /** Bracket tag */
+  bracketTag: string;
+  /** Prerequisites */
+  easyPrerequisites: string;
+  /** Spellbook URL */
+  spellbookUrl: string;
+}
+
+/** Results from find-my-combos grouped by inclusion type */
+export interface SpellbookFindCombosResult {
+  identity: string;
+  /** Combos fully present in the deck */
+  included: SpellbookCombo[];
+  /** Combos that could work with a different commander */
+  almostIncluded: SpellbookCombo[];
+}
+
+/** Combo data attached to a deck */
+export interface DeckCombosData {
+  /** Number of complete combos found in the deck */
+  comboCount: number;
+  /** The actual combos present in the deck */
+  combos: SpellbookCombo[];
 }

@@ -3,7 +3,7 @@
  */
 
 import { Layout } from './layout.js';
-import type { DeckDetailResponse, CardTypeGroup, DeckCardInfo, Color } from '../types.js';
+import type { DeckDetailResponse, CardTypeGroup, DeckCardInfo, Color, SpellbookCombo } from '../types.js';
 
 interface DeckDetailPageProps {
   deck: DeckDetailResponse;
@@ -61,6 +61,85 @@ function CardTypeSection({ group }: { group: CardTypeGroup }) {
       <div class="card-list">
         {group.cards.map((card) => (
           <CardRow card={card} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ComboCard({ combo }: { combo: SpellbookCombo }) {
+  return (
+    <div class="combo-card">
+      <div class="combo-header">
+        <div class="combo-cards-list">
+          {combo.cards.map((card, i) => (
+            <span class="combo-card-name">
+              {card.name}{i < combo.cards.length - 1 ? ' + ' : ''}
+            </span>
+          ))}
+          {combo.requires.length > 0 && (
+            <span class="combo-template">
+              {' + '}{combo.requires.map((r) => r.name).join(' + ')}
+            </span>
+          )}
+        </div>
+        <div class="combo-tags">
+          {combo.bracketTag && (
+            <span class="combo-bracket-tag">Bracket {combo.bracketTag}</span>
+          )}
+          <a href={combo.spellbookUrl} target="_blank" rel="noopener" class="combo-link">
+            View on Spellbook ↗
+          </a>
+        </div>
+      </div>
+      <div class="combo-produces">
+        {combo.produces.map((feature) => (
+          <span class="combo-feature-badge">{feature.name}</span>
+        ))}
+      </div>
+      {combo.easyPrerequisites && (
+        <div class="combo-prereqs">
+          <strong>Prerequisites:</strong> {combo.easyPrerequisites}
+        </div>
+      )}
+      <div class="combo-description">
+        {combo.description.split('\n').map((line) => (
+          <p>{line}</p>
+        ))}
+      </div>
+      <div class="combo-card-images">
+        {combo.cards.map((card) => (
+          card.imageUriFrontSmall && (
+            <img
+              src={card.imageUriFrontSmall}
+              alt={card.name}
+              class="combo-card-img"
+              loading="lazy"
+            />
+          )
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CombosSection({ combos }: { combos: SpellbookCombo[] }) {
+  if (combos.length === 0) return null;
+
+  return (
+    <div class="combos-section">
+      <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
+        ♾️ Combos Found
+        <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem;">
+          ({combos.length})
+        </span>
+      </h2>
+      <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+        Combos detected via <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a>
+      </p>
+      <div class="combos-grid">
+        {combos.map((combo) => (
+          <ComboCard combo={combo} />
         ))}
       </div>
     </div>
@@ -131,6 +210,10 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
           </div>
         ))}
       </div>
+
+      {deck.combos && deck.combos.combos.length > 0 && (
+        <CombosSection combos={deck.combos.combos} />
+      )}
 
       {deck.cardsByType.length > 0 && (
         <div class="decklist-section">

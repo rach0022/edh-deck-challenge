@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { createCacheService } from './services/cache.js';
 import { createMoxfieldService } from './services/moxfield.js';
+import { createSpellbookService } from './services/spellbook.js';
 import { createChallengeService } from './services/challenge.js';
 import { createChallengeRoutes } from './routes/challenge.js';
 import { createHealthRoutes } from './routes/health.js';
@@ -35,7 +36,8 @@ const config = loadConfig();
 
 const cache = createCacheService(config);
 const moxfield = createMoxfieldService(config);
-const challengeService = createChallengeService(config, cache, moxfield);
+const spellbook = createSpellbookService();
+const challengeService = createChallengeService(config, cache, moxfield, spellbook);
 
 // ─── Create Hono app ────────────────────────────────────────────────────────
 

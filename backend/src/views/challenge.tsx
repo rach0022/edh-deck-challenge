@@ -73,6 +73,13 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
         <span class="multi-deck-badge">{deckCount} decks</span>
       )}
 
+      {filled && (() => {
+        const totalCombos = slot.decks.reduce((sum, d) => sum + (d.comboCount ?? 0), 0);
+        return totalCombos > 0 ? (
+          <span class="combo-count-badge">♾️ {totalCombos} combo{totalCombos > 1 ? 's' : ''}</span>
+        ) : null;
+      })()}
+
       <div class="slot-content">
         <div class="slot-colors">
           {slot.colors.map((color) => (

@@ -10,6 +10,7 @@
 import type { AppConfig } from '../config.js';
 import type { CacheService } from './cache.js';
 import type { MoxfieldService } from './moxfield.js';
+import type { SpellbookService } from './spellbook.js';
 import { extractCommanders } from '../domain/commander-extractor.js';
 import { organizeDecks } from '../domain/deck-organizer.js';
 import { resolveColorIdentity, colorIdentityToKey } from '../domain/color-identity.js';
@@ -20,6 +21,7 @@ import type {
   DecksResponse,
   DeckDetailResponse,
   DeckSummaryResponse,
+  DeckCombosData,
   SlotCategory,
   MoxfieldDeckDetail,
   CardTypeGroup,
@@ -38,6 +40,7 @@ export function createChallengeService(
   config: AppConfig,
   cache: CacheService,
   moxfield: MoxfieldService,
+  spellbook: SpellbookService,
 ): ChallengeService {
 
   function cacheKey(type: string, id: string): string {
@@ -61,6 +64,24 @@ export function createChallengeService(
     // Extract commanders and organize
     const extractions = deckDetails.map((deck) => extractCommanders(deck));
     const progress = organizeDecks(extractions, username);
+
+    // Fetch combo counts for each deck (in parallel, non-blocking)
+    const comboResults = await Promise.all(
+      deckDetails.map(async (deck) => {
+        const combos = await spellbook.findCombosForDeck(deck);
+        // Cache combo data for the deck
+        await cache.set(cacheKey('combos', deck.publicId), combos);
+        return { deckId: deck.publicId, comboCount: combos.comboCount };
+      })
+    );
+
+    // Attach combo counts to slot entries
+    const comboCountMap = new Map(comboResults.map((r) => [r.deckId, r.comboCount]));
+    for (const slot of progress.slots) {
+      for (const deckEntry of slot.decks) {
+        deckEntry.comboCount = comboCountMap.get(deckEntry.deckId) ?? 0;
+      }
+    }
 
     // Build summary
     const categoryCounts = buildCategoryCounts(progress);
@@ -130,6 +151,16 @@ export function createChallengeService(
       const cachedDeck = await cache.get<MoxfieldDeckDetail>(cacheKey('deck', deckId));
       if (cachedDeck) {
         const detail = buildDeckDetailResponse(cachedDeck);
+        // Check for cached combo data
+        const cachedCombos = await cache.get<DeckCombosData>(cacheKey('combos', deckId));
+        if (cachedCombos) {
+          detail.combos = cachedCombos;
+        } else {
+          // Fetch combos fresh if not cached
+          const combos = await spellbook.findCombosForDeck(cachedDeck);
+          await cache.set(cacheKey('combos', deckId), combos);
+          detail.combos = combos;
+        }
         return { data: detail, cached: true };
       }
 
@@ -137,6 +168,11 @@ export function createChallengeService(
       const deck = await moxfield.fetchDeckDetail(deckId);
       await cache.set(cacheKey('deck', deckId), deck);
       const detail = buildDeckDetailResponse(deck);
+
+      // Fetch combos
+      const combos = await spellbook.findCombosForDeck(deck);
+      await cache.set(cacheKey('combos', deckId), combos);
+      detail.combos = combos;
 
       return { data: detail, cached: false };
     },
