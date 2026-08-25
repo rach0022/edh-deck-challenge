@@ -29,8 +29,18 @@ import type {
   MoxfieldCardEntry,
 } from '../types.js';
 
+export interface ProgressEvent {
+  phase: string;
+  message: string;
+  progress: number; // 0-100
+  detail?: string;
+}
+
+export type ProgressCallback = (event: ProgressEvent) => void;
+
 export interface ChallengeService {
   getChallenge(username: string): Promise<{ data: ChallengeResponse; cached: boolean }>;
+  getChallengeWithProgress(username: string, onProgress: ProgressCallback): Promise<{ data: ChallengeResponse; cached: boolean }>;
   getDecks(username: string): Promise<{ data: DecksResponse; cached: boolean }>;
   getDeckDetail(deckId: string): Promise<{ data: DeckDetailResponse; cached: boolean }>;
   refreshChallenge(username: string): Promise<ChallengeResponse>;
@@ -47,13 +57,26 @@ export function createChallengeService(
     return `edh:${type}:${id.toLowerCase()}`;
   }
 
-  async function fetchAndProcessChallenge(username: string): Promise<ChallengeResponse> {
-    // Fetch all decks from Moxfield
-    const deckSummaries = await moxfield.fetchUserDecks(username);
+  async function fetchAndProcessChallenge(username: string, onProgress?: ProgressCallback): Promise<ChallengeResponse> {
+    const emit = onProgress ?? (() => {});
 
-    // Fetch detail for each deck
+    // Phase 1: Connect to Moxfield and fetch deck list
+    emit({ phase: 'connecting', message: 'Connecting to Moxfield...', progress: 5 });
+    const deckSummaries = await moxfield.fetchUserDecks(username);
+    emit({ phase: 'connected', message: `Found ${deckSummaries.length} decks`, progress: 15, detail: `${deckSummaries.length} commander decks found` });
+
+    // Phase 2: Fetch detail for each deck (sequential — Moxfield rate limits)
     const deckDetails: MoxfieldDeckDetail[] = [];
-    for (const summary of deckSummaries) {
+    for (let i = 0; i < deckSummaries.length; i++) {
+      const summary = deckSummaries[i];
+      const deckProgress = 15 + Math.round(((i + 1) / deckSummaries.length) * 55);
+      emit({
+        phase: 'loading-decks',
+        message: `Loading deck ${i + 1} of ${deckSummaries.length}`,
+        progress: deckProgress,
+        detail: summary.name,
+      });
+
       const detail = await moxfield.fetchDeckDetail(summary.publicId);
       deckDetails.push(detail);
 
@@ -61,11 +84,13 @@ export function createChallengeService(
       await cache.set(cacheKey('deck', summary.publicId), detail);
     }
 
-    // Extract commanders and organize
+    // Phase 3: Extract commanders and organize into slots
+    emit({ phase: 'organizing', message: 'Organizing decks into color slots...', progress: 75 });
     const extractions = deckDetails.map((deck) => extractCommanders(deck));
     const progress = organizeDecks(extractions, username);
 
-    // Fetch combo counts for each deck (in parallel, non-blocking)
+    // Phase 4: Fetch combo counts for each deck (in parallel)
+    emit({ phase: 'combos', message: 'Searching for combos...', progress: 80, detail: `Checking ${deckDetails.length} decks for combos` });
     const comboResults = await Promise.all(
       deckDetails.map(async (deck) => {
         const combos = await spellbook.findCombosForDeck(deck);
@@ -82,6 +107,9 @@ export function createChallengeService(
         deckEntry.comboCount = comboCountMap.get(deckEntry.deckId) ?? 0;
       }
     }
+
+    const totalCombos = comboResults.reduce((sum, r) => sum + r.comboCount, 0);
+    emit({ phase: 'finalizing', message: 'Finalizing results...', progress: 95, detail: `Found ${totalCombos} total combos` });
 
     // Build summary
     const categoryCounts = buildCategoryCounts(progress);
@@ -125,6 +153,23 @@ export function createChallengeService(
       // Cache miss — fetch fresh
       const data = await fetchAndProcessChallenge(username);
       await cache.set(cacheKey('challenge', username), data);
+
+      return { data, cached: false };
+    },
+
+    async getChallengeWithProgress(username: string, onProgress: ProgressCallback) {
+      // Check cache first
+      onProgress({ phase: 'cache-check', message: 'Checking cache...', progress: 2 });
+      const cached = await cache.get<ChallengeResponse>(cacheKey('challenge', username));
+      if (cached) {
+        onProgress({ phase: 'complete', message: 'Loaded from cache!', progress: 100 });
+        return { data: cached, cached: true };
+      }
+
+      // Cache miss — fetch fresh with progress
+      const data = await fetchAndProcessChallenge(username, onProgress);
+      await cache.set(cacheKey('challenge', username), data);
+      onProgress({ phase: 'complete', message: 'Done!', progress: 100 });
 
       return { data, cached: false };
     },
