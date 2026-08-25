@@ -3,7 +3,7 @@
  */
 
 import { Layout } from './layout.js';
-import type { DeckDetailResponse, CardTypeGroup, DeckCardInfo, Color, SpellbookCombo } from '../types.js';
+import type { DeckDetailResponse, CardTypeGroup, DeckCardInfo, Color, SpellbookCombo, PotentialComboCard } from '../types.js';
 
 interface DeckDetailPageProps {
   deck: DeckDetailResponse;
@@ -146,6 +146,62 @@ function CombosSection({ combos }: { combos: SpellbookCombo[] }) {
   );
 }
 
+function PotentialCardRow({ card }: { card: PotentialComboCard }) {
+  return (
+    <div class="potential-card">
+      <div class="potential-card-main">
+        {card.imageUrl && (
+          <img
+            src={card.imageUrl}
+            alt={card.name}
+            class="potential-card-img"
+            loading="lazy"
+          />
+        )}
+        <div class="potential-card-info">
+          <div class="potential-card-name">{card.name}</div>
+          <div class="potential-card-count">
+            Enables <strong>{card.comboCount}</strong> combo{card.comboCount > 1 ? 's' : ''}
+          </div>
+          <div class="potential-card-combos">
+            {card.enabledCombos.map((combo) => (
+              <a href={combo.spellbookUrl} target="_blank" rel="noopener" class="potential-combo-link">
+                {combo.produces.slice(0, 2).join(', ')}
+                {combo.produces.length > 2 ? ` +${combo.produces.length - 2} more` : ''}
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PotentialCardsSection({ cards }: { cards: PotentialComboCard[] }) {
+  if (cards.length === 0) return null;
+
+  const totalCombos = cards.reduce((sum, c) => sum + c.comboCount, 0);
+
+  return (
+    <div class="potential-section">
+      <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
+        🧩 Potential Combos
+        <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem;">
+          ({totalCombos} combos from {cards.length} card{cards.length > 1 ? 's' : ''})
+        </span>
+      </h2>
+      <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+        Add one of these cards to unlock new combos within your color identity
+      </p>
+      <div class="potential-cards-grid">
+        {cards.map((card) => (
+          <PotentialCardRow card={card} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function typeEmoji(type: string): string {
   switch (type) {
     case 'Creature': return '👾';
@@ -213,6 +269,10 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
 
       {deck.combos && deck.combos.combos.length > 0 && (
         <CombosSection combos={deck.combos.combos} />
+      )}
+
+      {deck.combos && deck.combos.potentialCards.length > 0 && (
+        <PotentialCardsSection cards={deck.combos.potentialCards} />
       )}
 
       {deck.cardsByType.length > 0 && (

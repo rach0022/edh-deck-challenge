@@ -910,6 +910,91 @@ const css = `
     gap: 3px;
   }
 
+  /* ─── Potential Cards Section ────────────── */
+
+  .potential-section {
+    border-top: 1px solid var(--glass-border);
+    padding-top: 2rem;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .potential-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+  }
+
+  .potential-card {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    border: 1px solid rgba(240, 192, 64, 0.2);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .potential-card:hover {
+    border-color: rgba(240, 192, 64, 0.5);
+    box-shadow: 0 4px 20px rgba(240, 192, 64, 0.08);
+  }
+
+  .potential-card-main {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .potential-card-img {
+    width: 80px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+  }
+
+  .potential-card-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .potential-card-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f0c040;
+    margin-bottom: 0.25rem;
+  }
+
+  .potential-card-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+  }
+
+  .potential-card-count strong {
+    color: var(--text-primary);
+  }
+
+  .potential-card-combos {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .potential-combo-link {
+    font-size: 0.78rem;
+    color: var(--accent-green);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .potential-combo-link:hover {
+    color: #6ee7b7;
+    text-decoration: underline;
+  }
+
   /* ─── Responsive ────────────────────────── */
 
   @media (max-width: 768px) {
@@ -925,5 +1010,7 @@ const css = `
     .combo-header { flex-direction: column; }
     .combo-card-images { gap: 0.5rem; }
     .combo-card-img { width: 80px; }
+    .potential-cards-grid { grid-template-columns: 1fr; }
+    .potential-card-img { width: 60px; }
   }
 `;

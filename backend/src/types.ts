@@ -244,10 +244,28 @@ export interface SpellbookFindCombosResult {
   almostIncluded: SpellbookCombo[];
 }
 
+/** A card that could be added to the deck to enable new combos */
+export interface PotentialComboCard {
+  /** Card name */
+  name: string;
+  /** Number of combos this card would enable */
+  comboCount: number;
+  /** Image URL for the card */
+  imageUrl: string | null;
+  /** The combos this card would enable (brief info) */
+  enabledCombos: {
+    id: string;
+    produces: string[];
+    spellbookUrl: string;
+  }[];
+}
+
 /** Combo data attached to a deck */
 export interface DeckCombosData {
   /** Number of complete combos found in the deck */
   comboCount: number;
   /** The actual combos present in the deck */
   combos: SpellbookCombo[];
+  /** Cards that could be added to enable new combos (within color identity) */
+  potentialCards: PotentialComboCard[];
 }

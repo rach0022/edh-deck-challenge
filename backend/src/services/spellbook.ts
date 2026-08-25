@@ -12,6 +12,7 @@ import type {
   SpellbookCombo,
   SpellbookFindCombosResult,
   DeckCombosData,
+  PotentialComboCard,
 } from '../types.js';
 
 const SPELLBOOK_API_BASE = 'https://backend.commanderspellbook.com';
@@ -110,19 +111,83 @@ export function createSpellbookService(): SpellbookService {
         // Extract mainboard card names (including commanders since they're part of the 99 conceptually)
         const mainboardNames = Object.values(deck.mainboard).map((entry) => entry.card.name);
 
+        // Build a set of all cards in the deck for quick lookup
+        const deckCardNames = new Set([...commanderNames, ...mainboardNames]);
+
         const result = await findCombos(commanderNames, mainboardNames);
+
+        // Compute potential cards from almostIncluded combos
+        const potentialCards = computePotentialCards(result.almostIncluded, deckCardNames);
 
         return {
           comboCount: result.included.length,
           combos: result.included,
+          potentialCards,
         };
       } catch (error) {
         console.error('Spellbook combo lookup failed:', error);
         // Return empty on failure — combos are a nice-to-have, not critical
-        return { comboCount: 0, combos: [] };
+        return { comboCount: 0, combos: [], potentialCards: [] };
       }
     },
   };
+}
+
+/**
+ * From the "almostIncluded" combos, find which single card is missing
+ * from the deck for each combo, then aggregate by card name sorted by
+ * number of combos enabled (descending).
+ */
+function computePotentialCards(
+  almostIncluded: SpellbookCombo[],
+  deckCardNames: Set<string>,
+): PotentialComboCard[] {
+  // Map: card name → { imageUrl, combos it enables }
+  const cardMap = new Map<string, {
+    imageUrl: string | null;
+    combos: { id: string; produces: string[]; spellbookUrl: string }[];
+  }>();
+
+  for (const combo of almostIncluded) {
+    // Find cards in this combo that are NOT in the deck
+    const missingCards = combo.cards.filter((card) => !deckCardNames.has(card.name));
+
+    // "almostIncluded" should have exactly one missing card, but handle edge cases
+    if (missingCards.length !== 1) continue;
+
+    const missingCard = missingCards[0];
+    const existing = cardMap.get(missingCard.name);
+
+    const comboInfo = {
+      id: combo.id,
+      produces: combo.produces.map((p) => p.name),
+      spellbookUrl: combo.spellbookUrl,
+    };
+
+    if (existing) {
+      existing.combos.push(comboInfo);
+    } else {
+      cardMap.set(missingCard.name, {
+        imageUrl: missingCard.imageUriFrontNormal ?? missingCard.imageUriFrontSmall ?? null,
+        combos: [comboInfo],
+      });
+    }
+  }
+
+  // Convert to array sorted by combo count descending, then name ascending
+  const result: PotentialComboCard[] = [];
+  for (const [name, data] of cardMap) {
+    result.push({
+      name,
+      comboCount: data.combos.length,
+      imageUrl: data.imageUrl,
+      enabledCombos: data.combos,
+    });
+  }
+
+  result.sort((a, b) => b.comboCount - a.comboCount || a.name.localeCompare(b.name));
+
+  return result;
 }
 
 // ─── Raw API response types (internal) ──────────────────────────────────────
