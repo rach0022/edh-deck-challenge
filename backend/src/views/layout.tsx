@@ -20,17 +20,35 @@ export function Layout({ title, children }: LayoutProps) {
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        {/* Load the font stylesheet without blocking first paint: fetch it as
+            a non-render-blocking "print" sheet, then flip to "all" once loaded.
+            The <noscript> fallback keeps it working with JS disabled. The
+            body font-family already lists system-font fallbacks, so text
+            renders immediately and swaps to Inter when ready (font-display=swap). */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+          media="print"
+          onload="this.media='all'"
+        />
+        <noscript>
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+          />
+        </noscript>
         <style>{css}</style>
       </head>
       <body>
-        <div class="bg-glow bg-glow-1" />
-        <div class="bg-glow bg-glow-2" />
-        <div class="bg-glow bg-glow-3" />
+        <div class="bg-glow bg-glow-1" aria-hidden="true" />
+        <div class="bg-glow bg-glow-2" aria-hidden="true" />
+        <div class="bg-glow bg-glow-3" aria-hidden="true" />
         <header>
           <div class="header-inner">
-            <a href="/" class="logo">🃏 EDH 32</a>
-            <nav>
+            <a href="/" class="logo" aria-label="EDH 32 Deck Challenge home">
+              <span aria-hidden="true">🃏</span> EDH 32
+            </a>
+            <nav aria-label="Primary">
               <a href="/" class="nav-link">Home</a>
               <a href="https://github.com/rach0022/edh-deck-challenge" target="_blank" rel="noopener" class="nav-link">GitHub</a>
             </nav>
@@ -64,8 +82,8 @@ const css = `
     --glass-border: rgba(255, 255, 255, 0.08);
     --glass-hover: rgba(255, 255, 255, 0.06);
     --text-primary: #f0eef6;
-    --text-secondary: #a8a3b8;
-    --text-muted: #6b6580;
+    --text-secondary: #b8b3c8;
+    --text-muted: #938ca8;
     --accent-purple: #a855f7;
     --accent-green: #34d399;
     --accent-gradient: linear-gradient(135deg, #a855f7, #34d399);
@@ -97,6 +115,10 @@ const css = `
     filter: blur(120px);
     pointer-events: none;
     z-index: 0;
+    /* Promote to an isolated composited layer so the expensive blur is
+       rendered once and not repainted as content scrolls over it. */
+    will-change: transform;
+    transform: translateZ(0);
   }
 
   .bg-glow-1 {
@@ -334,6 +356,10 @@ const css = `
 
   .category-section {
     margin-bottom: 4rem;
+    /* Skip rendering off-screen categories until near the viewport,
+       cutting scroll/paint cost on the long 32-slot page. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 500px;
   }
 
   .category-header {
@@ -365,10 +391,19 @@ const css = `
     border-radius: var(--radius-lg);
     overflow: hidden;
     border: 1px solid var(--glass-border);
+    background: var(--bg-surface);
+    transition: transform 0.25s, border-color 0.3s, box-shadow 0.3s;
+    /* Isolate paint/layout so scrolling one card doesn't repaint others */
+    contain: layout paint style;
+  }
+
+  /* Only unfilled (glass) cards need the blur — filled cards are covered
+     by an opaque art layer, so their backdrop-filter would be invisible
+     overhead. Blurring 30+ stacked layers is the main scroll-jank source. */
+  .slot-card.empty {
     background: var(--glass);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    transition: transform 0.25s, border-color 0.3s, box-shadow 0.3s;
   }
 
   .slot-card:hover {
@@ -386,7 +421,7 @@ const css = `
   }
 
   .slot-card.empty {
-    opacity: 0.5;
+    opacity: 0.55;
   }
 
   .slot-card.empty:hover {
@@ -405,18 +440,56 @@ const css = `
     animation-name: deckFade;
     animation-timing-function: ease-in-out;
     animation-iteration-count: infinite;
+    will-change: opacity;
+  }
+
+  /* ─── Two-Deck Diagonal Split ───────────── */
+
+  .slot-art.slot-art-split {
+    animation: none;
+    opacity: 1;
+  }
+
+  /* Diagonal cut runs along the "/" anti-diagonal, from the top-right
+     corner to the bottom-left corner.
+     Left half is the upper-left triangle, right half the lower-right. */
+  .slot-art-split-left {
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+  }
+
+  .slot-art-split-right {
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  }
+
+  /* The visible diagonal divider line between the two halves.
+     Must run along the same "/" diagonal as the clip-path cut
+     (top-right corner to bottom-left corner). */
+  .slot-split-divider {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 1px),
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent calc(50% + 1px)
+    );
   }
 
   .slot-art::after {
     content: '';
     position: absolute;
     inset: 0;
+    /* Stronger bottom scrim so deck/commander names stay legible over
+       arbitrary card art (including light-colored art). No backdrop-filter
+       here — it was recompositing on every filled card during scroll. */
     background: linear-gradient(
       180deg,
-      rgba(10, 10, 18, 0.2) 0%,
-      rgba(10, 10, 18, 0.88) 100%
+      rgba(10, 10, 18, 0.15) 0%,
+      rgba(10, 10, 18, 0.55) 45%,
+      rgba(10, 10, 18, 0.92) 100%
     );
-    backdrop-filter: blur(1px);
   }
 
   .slot-content {
@@ -434,6 +507,7 @@ const css = `
     font-weight: 700;
     color: #fff;
     margin-bottom: 0.3rem;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.7);
   }
 
   .slot-colors {
@@ -449,15 +523,41 @@ const css = `
   }
 
   .commander-name {
-    color: var(--accent-green);
+    color: #6ee7b7;
     font-size: 0.9rem;
-    font-weight: 600;
+    font-weight: 700;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.8);
   }
 
   .deck-name {
-    color: var(--text-secondary);
+    color: #e2dff0;
     font-size: 0.8rem;
     font-style: italic;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.8);
+  }
+
+  .slot-link {
+    display: inline-block;
+    margin-top: 0.15rem;
+    font-size: 0.75rem;
+    color: #a9c7ff;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  }
+
+  .slot-link:hover {
+    color: #cfe0ff;
+    text-decoration: underline;
+  }
+
+  .back-link {
+    color: #a9c7ff;
+    font-weight: 600;
+  }
+
+  .back-link:hover {
+    color: #cfe0ff;
+    text-decoration: underline;
   }
 
   .empty-label {
@@ -499,6 +599,7 @@ const css = `
     animation-name: deckFade;
     animation-timing-function: ease-in-out;
     animation-iteration-count: infinite;
+    will-change: opacity;
   }
 
   @keyframes deckFade {
@@ -507,6 +608,30 @@ const css = `
     45%  { opacity: 1; }
     50%  { opacity: 0; }
     100% { opacity: 0; }
+  }
+
+  /* ─── Two-Deck Split Info ───────────────── */
+
+  .deck-info-split {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+  }
+
+  .deck-info-split .deck-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .deck-info-split .deck-info:last-child {
+    text-align: right;
+  }
+
+  .deck-info-split .commander-name,
+  .deck-info-split .deck-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ─── Deck Detail Page ──────────────────── */
@@ -744,6 +869,28 @@ const css = `
     color: var(--text-primary);
     font-size: 0.95rem;
     flex: 1;
+  }
+
+  .card-combo-badge {
+    background: rgba(168, 85, 247, 0.2);
+    color: var(--accent-purple);
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .card-potential-badge {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--accent-green);
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .mana-cost {
@@ -1165,5 +1312,55 @@ const css = `
     .loading-container { padding: 2rem 1rem; }
     .loading-title { font-size: 1.4rem; }
     .loading-spinner { width: 48px; height: 48px; }
+  }
+
+  /* ─── Accessibility: Keyboard Focus ─────── */
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--accent-green);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .slot-card a:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
+
+  /* ─── Accessibility: Reduced Motion ─────── */
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    /* Multi-deck slots animate art/info by fading between decks.
+       With motion disabled, pin them to the first deck so nothing
+       is stuck invisible. */
+    .slot-art.slot-art-cycle,
+    .deck-info.deck-info-cycle {
+      opacity: 1 !important;
+    }
+
+    .slot-art.slot-art-cycle:not(:first-of-type) {
+      display: none;
+    }
+
+    .deck-info.deck-info-cycle:not(:first-of-type) {
+      display: none;
+    }
+
+    .loading-spinner {
+      animation: none !important;
+      border-top-color: var(--accent-purple);
+    }
   }
 `;
