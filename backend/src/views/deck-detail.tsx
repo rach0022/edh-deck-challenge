@@ -42,10 +42,28 @@ function ManaCost({ cost }: { cost: string }) {
 }
 
 function CardRow({ card }: { card: DeckCardInfo }) {
+  const comboCount = card.comboCount ?? 0;
+  const potentialCount = card.potentialComboCount ?? 0;
   return (
     <div class="card-row">
       <span class="card-quantity">{card.quantity}x</span>
       <span class="card-name">{card.name}</span>
+      {comboCount > 0 && (
+        <span
+          class="card-combo-badge"
+          title={`In ${comboCount} combo${comboCount > 1 ? 's' : ''} in this deck`}
+        >
+          ♾️ {comboCount}
+        </span>
+      )}
+      {potentialCount > 0 && (
+        <span
+          class="card-potential-badge"
+          title={`In ${potentialCount} potential combo${potentialCount > 1 ? 's' : ''} (missing one card)`}
+        >
+          🧩 {potentialCount}
+        </span>
+      )}
       <ManaCost cost={card.manaCost} />
     </div>
   );
