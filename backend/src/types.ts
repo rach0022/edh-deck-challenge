@@ -172,6 +172,10 @@ export interface DeckCardInfo {
   setCode: string;
   collectorNumber: string;
   imageUrl: string | null;
+  /** Number of complete combos (present in the deck) this card is part of */
+  comboCount?: number;
+  /** Number of potential/almost-included combos this card is part of */
+  potentialComboCount?: number;
 }
 
 // ─── Commander Spellbook types ──────────────────────────────────────────────
@@ -266,6 +270,8 @@ export interface DeckCombosData {
   comboCount: number;
   /** The actual combos present in the deck */
   combos: SpellbookCombo[];
+  /** Combos missing exactly one card (potential combos) */
+  almostIncluded?: SpellbookCombo[];
   /** Cards that could be added to enable new combos (within color identity) */
   potentialCards: PotentialComboCard[];
 }

@@ -206,6 +206,7 @@ export function createChallengeService(
           await cache.set(cacheKey('combos', deckId), combos);
           detail.combos = combos;
         }
+        annotateCardComboCounts(detail);
         return { data: detail, cached: true };
       }
 
@@ -218,6 +219,7 @@ export function createChallengeService(
       const combos = await spellbook.findCombosForDeck(deck);
       await cache.set(cacheKey('combos', deckId), combos);
       detail.combos = combos;
+      annotateCardComboCounts(detail);
 
       return { data: detail, cached: false };
     },
@@ -283,6 +285,39 @@ function buildDeckDetailResponse(deck: MoxfieldDeckDetail): DeckDetailResponse {
     cardsByType,
   };
 }
+
+/**
+ * Annotates each card in the deck detail with the number of complete combos
+ * (present in the deck) and potential combos (almost-included, missing one card)
+ * that the card participates in. Uses the combo data attached to the detail.
+ */
+function annotateCardComboCounts(detail: DeckDetailResponse): void {
+  const combos = detail.combos;
+  if (!combos) return;
+
+  const comboCounts = new Map<string, number>();
+  const potentialCounts = new Map<string, number>();
+
+  for (const combo of combos.combos) {
+    for (const card of combo.cards) {
+      comboCounts.set(card.name, (comboCounts.get(card.name) ?? 0) + 1);
+    }
+  }
+
+  for (const combo of combos.almostIncluded ?? []) {
+    for (const card of combo.cards) {
+      potentialCounts.set(card.name, (potentialCounts.get(card.name) ?? 0) + 1);
+    }
+  }
+
+  for (const group of detail.cardsByType) {
+    for (const card of group.cards) {
+      card.comboCount = comboCounts.get(card.name) ?? 0;
+      card.potentialComboCount = potentialCounts.get(card.name) ?? 0;
+    }
+  }
+}
+
 
 /**
  * Categorizes cards into type groups based on the type_line.

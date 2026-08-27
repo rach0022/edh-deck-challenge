@@ -122,12 +122,13 @@ export function createSpellbookService(): SpellbookService {
         return {
           comboCount: result.included.length,
           combos: result.included,
+          almostIncluded: result.almostIncluded,
           potentialCards,
         };
       } catch (error) {
         console.error('Spellbook combo lookup failed:', error);
         // Return empty on failure — combos are a nice-to-have, not critical
-        return { comboCount: 0, combos: [], potentialCards: [] };
+        return { comboCount: 0, combos: [], almostIncluded: [], potentialCards: [] };
       }
     },
   };
