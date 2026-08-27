@@ -157,11 +157,16 @@ export function ChallengePage({ challenge, cached }: ChallengePageProps) {
           <div
             class="progress-bar"
             style={`width: ${summary.percentComplete}%`}
+            role="progressbar"
+            aria-valuenow={summary.percentComplete}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Challenge progress: ${summary.filledCount} of ${summary.totalSlots} slots filled`}
           />
         </div>
         <div class="progress-text">
           {summary.filledCount} / {summary.totalSlots} slots filled ({summary.percentComplete}%)
-          {cached && <span style="margin-left: 1rem; color: #666; font-size: 0.8rem;">(cached)</span>}
+          {cached && <span style="margin-left: 1rem; color: var(--text-muted); font-size: 0.8rem;">(cached)</span>}
         </div>
       </div>
 

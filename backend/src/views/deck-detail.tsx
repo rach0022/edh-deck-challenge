@@ -257,7 +257,7 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
           <a href={deck.moxfieldUrl} target="_blank" rel="noopener">
             View on Moxfield ↗
           </a>
-          {cached && <span style="margin-left: 1rem; color: #666; font-size: 0.8rem;">(cached)</span>}
+          {cached && <span style="margin-left: 1rem; color: var(--text-muted); font-size: 0.8rem;">(cached)</span>}
         </div>
       </div>
 
@@ -276,7 +276,7 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
                 loading="lazy"
               />
             ) : (
-              <div style="width: 200px; height: 280px; background: #3a3a5a; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #666;">
+              <div style="width: 200px; height: 280px; background: #3a3a5a; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
                 No image
               </div>
             )}
@@ -307,8 +307,9 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
       )}
 
       <div style="margin-top: 2rem;">
-        <a href="javascript:history.back()" style="color: #80b0ff;">← Back</a>
+        <a href="/" class="back-link" id="back-link">← Back</a>
       </div>
+      <script dangerouslySetInnerHTML={{ __html: "var b=document.getElementById('back-link');if(b&&window.history.length>1){b.addEventListener('click',function(e){e.preventDefault();window.history.back();});}" }} />
     </Layout>
   );
 }

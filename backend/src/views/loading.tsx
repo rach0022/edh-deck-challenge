@@ -24,32 +24,34 @@ export function LoadingPage({ username }: LoadingPageProps) {
         <h1 class="loading-title">Loading {username}'s Decks</h1>
 
         <div class="loading-progress-container">
-          <div class="loading-progress-bar" id="progress-bar" style="width: 0%" />
+          <div class="loading-progress-bar" id="progress-bar" style="width: 0%"
+            role="progressbar" aria-valuenow={0} aria-valuemin={0} aria-valuemax={100}
+            aria-label="Loading progress" />
         </div>
         <div class="loading-progress-text" id="progress-text">0%</div>
 
-        <div class="loading-status" id="status-message">Preparing to connect to Moxfield</div>
-        <div class="loading-detail" id="status-detail"></div>
+        <div class="loading-status" id="status-message" aria-live="polite">Preparing to connect to Moxfield</div>
+        <div class="loading-detail" id="status-detail" aria-live="polite"></div>
 
         <div class="loading-phases" id="phases-list">
           <div class="phase-item" id="phase-connecting">
-            <span class="phase-icon">⏳</span>
+            <span class="phase-icon" aria-hidden="true">⏳</span>
             <span class="phase-label">Connect to Moxfield</span>
           </div>
           <div class="phase-item" id="phase-loading-decks">
-            <span class="phase-icon">⏳</span>
+            <span class="phase-icon" aria-hidden="true">⏳</span>
             <span class="phase-label">Load deck data</span>
           </div>
           <div class="phase-item" id="phase-organizing">
-            <span class="phase-icon">⏳</span>
+            <span class="phase-icon" aria-hidden="true">⏳</span>
             <span class="phase-label">Organize into color slots</span>
           </div>
           <div class="phase-item" id="phase-combos">
-            <span class="phase-icon">⏳</span>
+            <span class="phase-icon" aria-hidden="true">⏳</span>
             <span class="phase-label">Search for combos</span>
           </div>
           <div class="phase-item" id="phase-complete">
-            <span class="phase-icon">⏳</span>
+            <span class="phase-icon" aria-hidden="true">⏳</span>
             <span class="phase-label">Finalize results</span>
           </div>
         </div>
@@ -130,6 +132,7 @@ function loadingScript(sseUrl: string, challengeUrl: string): string {
     var data = JSON.parse(e.data);
 
     progressBar.style.width = data.progress + '%';
+    progressBar.setAttribute('aria-valuenow', data.progress);
     progressText.textContent = data.progress + '%';
     statusMessage.textContent = data.message;
     statusDetail.textContent = data.detail || '';
@@ -142,6 +145,7 @@ function loadingScript(sseUrl: string, challengeUrl: string): string {
     source.close();
 
     progressBar.style.width = '100%';
+    progressBar.setAttribute('aria-valuenow', 100);
     progressText.textContent = '100%';
     statusMessage.textContent = 'Done! Redirecting...';
     statusDetail.textContent = '';
@@ -163,10 +167,12 @@ function loadingScript(sseUrl: string, challengeUrl: string): string {
       progressText.textContent = 'Error';
 
       var container = document.querySelector('.loading-container');
-      var retryHtml = '<div style="margin-top: 2rem; text-align: center;">' +
-        '<a href="javascript:window.location.reload()" style="color: var(--accent-green); margin-right: 1.5rem;">Try Again</a>' +
+      var retryHtml = '<div style="margin-top: 2rem; text-align: center; display: flex; gap: 1.5rem; justify-content: center;">' +
+        '<button type="button" id="retry-btn" style="background: none; border: none; padding: 0; font: inherit; cursor: pointer; color: var(--accent-green); text-decoration: underline;">Try Again</button>' +
         '<a href="/" style="color: var(--accent-purple);">Back to Home</a></div>';
       container.insertAdjacentHTML('beforeend', retryHtml);
+      var retryBtn = document.getElementById('retry-btn');
+      if (retryBtn) retryBtn.addEventListener('click', function() { window.location.reload(); });
       return;
     }
 
