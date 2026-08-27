@@ -44,17 +44,29 @@ function artCropUrl(setCode: string, collectorNumber: string): string {
 function SlotCard({ slot }: { slot: ColorSlot }) {
   const filled = slot.decks.length > 0;
   const deckCount = slot.decks.length;
-  const isMulti = deckCount > 1;
+  const isSplit = deckCount === 2;
+  const isMulti = deckCount > 2;
 
-  // For multi-deck slots, each deck gets equal time in the animation cycle
+  // For 3+ decks, each deck gets equal time in the fade animation cycle
   const cycleDuration = deckCount * 4; // 4 seconds per deck
 
   return (
-    <div class={`slot-card ${filled ? 'filled' : 'empty'}`}>
+    <div class={`slot-card ${filled ? 'filled' : 'empty'} ${isSplit ? 'slot-card-split' : ''}`}>
       {filled && slot.decks.map((deck, index) => {
         const commander = deck.commanders[0];
         const hasArt = commander?.setCode && commander?.collectorNumber;
         if (!hasArt) return null;
+
+        // Two-deck slots: diagonal split (no animation).
+        // The first deck fills the top-left half, the second the bottom-right.
+        if (isSplit) {
+          return (
+            <div
+              class={`slot-art slot-art-split slot-art-split-${index === 0 ? 'left' : 'right'}`}
+              style={`background-image: url('${artCropUrl(commander.setCode, commander.collectorNumber)}')`}
+            />
+          );
+        }
 
         return (
           <div
@@ -69,7 +81,9 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
         );
       })}
 
-      {isMulti && (
+      {isSplit && <span class="slot-split-divider" />}
+
+      {(isSplit || isMulti) && (
         <span class="multi-deck-badge">{deckCount} decks</span>
       )}
 
@@ -89,7 +103,7 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
         <div class="slot-name">{slot.name}</div>
 
         {filled ? (
-          <div class={isMulti ? 'deck-info-carousel' : ''}>
+          <div class={isMulti ? 'deck-info-carousel' : isSplit ? 'deck-info-split' : ''}>
             {slot.decks.map((deck, index) => (
               <div
                 class={`deck-info ${isMulti ? 'deck-info-cycle' : ''}`}
@@ -104,7 +118,11 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
                 </div>
                 <div class="deck-name">{deck.deckName}</div>
                 {deck.deckId && (
-                  <a href={`/deck/${deck.deckId}`} style="font-size: 0.75rem; color: #80b0ff;">
+                  <a
+                    href={`/deck/${deck.deckId}`}
+                    class="slot-link"
+                    aria-label={`View details for ${deck.deckName}`}
+                  >
                     View details →
                   </a>
                 )}
