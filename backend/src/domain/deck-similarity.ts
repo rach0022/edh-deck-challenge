@@ -12,7 +12,13 @@
  * separator) don't cause false mismatches.
  */
 
-import type { CedhReferenceDeck, CedhMatch, MissingCard } from '../types.js';
+import type {
+  CedhReferenceDeck,
+  CedhMatch,
+  ReferenceCard,
+  ReferenceCardGroup,
+} from '../types.js';
+import { CARD_TYPE_ORDER, classifyCardType } from './card-type.js';
 
 /** Rounds a monetary amount to 2 decimal places. */
 function roundMoney(value: number): number {
@@ -47,67 +53,98 @@ export function buildCardSet(names: Iterable<string>): Set<string> {
 /**
  * Scores a single reference deck against the user's normalized collection.
  *
- * Each missing card is priced using the deck's captured USD price (for the
- * printing in the reference decklist) and converted to CAD via `usdToCad`.
+ * Builds the full reference decklist grouped by card type, flagging each card
+ * as owned or missing. Missing cards are priced using the deck's captured USD
+ * price (for the printing in the reference decklist), converted to CAD via
+ * `usdToCad`. (Owned cards are still priced for reference/display.)
  */
 export function scoreDeck(
   deck: CedhReferenceDeck,
   ownedCards: Set<string>,
   usdToCad: number,
 ): CedhMatch {
-  // Deduplicate reference cards by normalized name, but keep the original
-  // display name for the missing list.
+  // Bucket cards by type category. The corpus decklist is already
+  // de-duplicated, but guard against dupes defensively.
   const seen = new Set<string>();
-  const referenceCards: { display: string; normalized: string }[] = [];
-  for (const name of deck.cardNames) {
-    const normalized = normalizeCardName(name);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    referenceCards.push({ display: name.trim(), normalized });
-  }
-
-  const prices = deck.cardPrices ?? {};
-  const missingCards: MissingCard[] = [];
+  const byType = new Map<string, ReferenceCard[]>();
   let ownedCount = 0;
+  let missingCount = 0;
   let missingTotalUsd = 0;
   let missingUnpricedCount = 0;
 
-  for (const card of referenceCards) {
-    if (ownedCards.has(card.normalized)) {
+  for (const card of deck.decklist ?? []) {
+    const normalized = normalizeCardName(card.name);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+
+    const owned = ownedCards.has(normalized);
+    const usdRaw = typeof card.value === 'number' ? card.value : null;
+    // Derive the single grouping category from the parsed type list.
+    const type = classifyCardType(card.types.join(' '));
+
+    if (owned) {
       ownedCount++;
-      continue;
-    }
-
-    const usd = typeof prices[card.normalized] === 'number' ? prices[card.normalized] : null;
-    if (usd == null) {
-      missingUnpricedCount++;
     } else {
-      missingTotalUsd += usd;
+      missingCount++;
+      if (usdRaw == null) {
+        missingUnpricedCount++;
+      } else {
+        missingTotalUsd += usdRaw;
+      }
     }
 
-    missingCards.push({
-      name: card.display,
-      usd: usd == null ? null : roundMoney(usd),
-      cad: usd == null ? null : roundMoney(usd * usdToCad),
+    const entry: ReferenceCard = {
+      name: card.name.trim(),
+      type,
+      types: card.types,
+      manaCost: card.manaCost,
+      scryfallId: card.scryfallId,
+      owned,
+      usd: usdRaw == null ? null : roundMoney(usdRaw),
+      cad: usdRaw == null ? null : roundMoney(usdRaw * usdToCad),
+    };
+
+    const list = byType.get(type);
+    if (list) list.push(entry);
+    else byType.set(type, [entry]);
+  }
+
+  // Build groups in canonical type order; within each: missing first
+  // (priciest first), then owned (by name).
+  const cardGroups: ReferenceCardGroup[] = [];
+  for (const type of CARD_TYPE_ORDER) {
+    const cards = byType.get(type);
+    if (!cards || cards.length === 0) continue;
+
+    cards.sort((a, b) => {
+      if (a.owned !== b.owned) return a.owned ? 1 : -1; // missing first
+      if (!a.owned) {
+        // both missing: priciest first, then name
+        return (b.usd ?? 0) - (a.usd ?? 0) || a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name); // both owned: by name
+    });
+
+    cardGroups.push({
+      type,
+      cards,
+      missingCount: cards.filter((c) => !c.owned).length,
+      ownedCount: cards.filter((c) => c.owned).length,
     });
   }
 
-  const totalCount = referenceCards.length;
+  const totalCount = seen.size;
   const ownedFraction = totalCount === 0 ? 0 : ownedCount / totalCount;
-
-  // Sort: priciest cards first (most impactful buys), then by name.
-  missingCards.sort(
-    (a, b) => (b.usd ?? 0) - (a.usd ?? 0) || a.name.localeCompare(b.name),
-  );
 
   return {
     deck,
     ownedFraction,
     ownedCount,
     totalCount,
-    missingCards,
+    cardGroups,
     missingTotalUsd: roundMoney(missingTotalUsd),
     missingTotalCad: roundMoney(missingTotalUsd * usdToCad),
+    missingCount,
     missingUnpricedCount,
   };
 }
@@ -130,7 +167,7 @@ export function rankMatches(
   limit = 5,
 ): CedhMatch[] {
   const scored = decks
-    .filter((deck) => deck.cardNames.length > 0)
+    .filter((deck) => (deck.decklist?.length ?? 0) > 0)
     .map((deck) => scoreDeck(deck, ownedCards, usdToCad));
 
   scored.sort(

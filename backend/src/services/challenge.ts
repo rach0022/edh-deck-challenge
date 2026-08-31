@@ -15,6 +15,7 @@ import { extractCommanders } from '../domain/commander-extractor.js';
 import { organizeDecks } from '../domain/deck-organizer.js';
 import { resolveColorIdentity, colorIdentityToKey } from '../domain/color-identity.js';
 import { COLOR_COMBINATIONS } from '../domain/color-combinations.js';
+import { classifyCardType, CARD_TYPE_ORDER } from '../domain/card-type.js';
 import type {
   ChallengeProgress,
   ChallengeResponse,
@@ -321,36 +322,8 @@ function annotateCardComboCounts(detail: DeckDetailResponse): void {
 
 /**
  * Categorizes cards into type groups based on the type_line.
- * Order: Creatures, Planeswalkers, Instants, Sorceries, Artifacts,
- * Enchantments, Lands, Other
+ * Order and classification come from the shared domain module.
  */
-const TYPE_ORDER = [
-  'Creature',
-  'Planeswalker',
-  'Instant',
-  'Sorcery',
-  'Artifact',
-  'Enchantment',
-  'Land',
-  'Battle',
-  'Other',
-];
-
-function classifyCardType(typeLine: string): string {
-  // Check in priority order — a card like "Artifact Creature" → Creature
-  const normalized = typeLine.toLowerCase();
-
-  if (normalized.includes('creature')) return 'Creature';
-  if (normalized.includes('planeswalker')) return 'Planeswalker';
-  if (normalized.includes('instant')) return 'Instant';
-  if (normalized.includes('sorcery')) return 'Sorcery';
-  if (normalized.includes('battle')) return 'Battle';
-  // Artifact and Enchantment checked after creature (for "Enchantment Creature" etc.)
-  if (normalized.includes('artifact')) return 'Artifact';
-  if (normalized.includes('enchantment')) return 'Enchantment';
-  if (normalized.includes('land')) return 'Land';
-  return 'Other';
-}
 
 function groupCardsByType(mainboard: Record<string, MoxfieldCardEntry>): CardTypeGroup[] {
   const groups = new Map<string, DeckCardInfo[]>();
@@ -390,7 +363,7 @@ function groupCardsByType(mainboard: Record<string, MoxfieldCardEntry>): CardTyp
 
   // Build output in canonical order, skip empty groups
   const result: CardTypeGroup[] = [];
-  for (const type of TYPE_ORDER) {
+  for (const type of CARD_TYPE_ORDER) {
     const cards = groups.get(type);
     if (cards && cards.length > 0) {
       result.push({

@@ -12,6 +12,7 @@ import { Layout } from './layout.js';
 import type {
   CedhMatchResponse,
   CedhMatch,
+  ReferenceCardGroup,
   UserDeckSummary,
   Color,
 } from '../types.js';
@@ -81,6 +82,74 @@ function UserDeckCard({ deck }: { deck: UserDeckSummary }) {
   );
 }
 
+/** Renders a mana cost string like "{1}{G}{W}" into small symbol images. */
+function ManaCost({ cost }: { cost: string }) {
+  if (!cost) return null;
+  const symbols = cost.match(/\{[^}]+\}/g) ?? [];
+  if (symbols.length === 0) return null;
+  return (
+    <span class="cedh-mana-cost">
+      {symbols.map((sym) => {
+        // Scryfall symbol filenames strip the braces and the "/" separator:
+        // {B} → B, {B/P} → BP (Phyrexian), {W/U} → WU (hybrid), {2/W} → 2W.
+        const code = sym.replace(/[{}]/g, '').replace(/\//g, '');
+        return (
+          <img
+            src={`https://svgs.scryfall.io/card-symbols/${code}.svg`}
+            alt={sym}
+            width="13"
+            height="13"
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+// ─── One card-type group within a match's decklist ───────────────────────────
+
+function CardGroup({ group }: { group: ReferenceCardGroup }) {
+  return (
+    <div class="cedh-group">
+      <div class="cedh-group-header">
+        <span class="cedh-group-type">{group.type}</span>
+        <span class="cedh-group-counts">
+          {group.missingCount > 0 && (
+            <span class="cedh-group-missing">{group.missingCount} missing</span>
+          )}
+          {group.missingCount > 0 && group.ownedCount > 0 && ' · '}
+          {group.ownedCount > 0 && (
+            <span class="cedh-group-owned">{group.ownedCount} owned</span>
+          )}
+        </span>
+      </div>
+      <ul class="cedh-card-list">
+        {group.cards.map((card) => (
+          <li class={`cedh-card-row ${card.owned ? 'is-owned' : 'is-missing'}`}>
+            <span class="cedh-card-name">
+              {card.owned && <span class="cedh-card-check" aria-hidden="true">✓ </span>}
+              {card.scryfallId ? (
+                <a
+                  href={`https://scryfall.com/card/${card.scryfallId}`}
+                  target="_blank"
+                  rel="noopener"
+                  class="cedh-card-link"
+                >
+                  {card.name}
+                </a>
+              ) : (
+                card.name
+              )}
+              <ManaCost cost={card.manaCost} />
+            </span>
+            <span class="cedh-card-price">{cad(card.cad)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ─── A single reference-deck match ───────────────────────────────────────────
 
 function MatchCard({ match, rank }: { match: CedhMatch; rank: number }) {
@@ -129,8 +198,8 @@ function MatchCard({ match, rank }: { match: CedhMatch; rank: number }) {
           {' · '}
           {match.ownedCount}/{match.totalCount} cards
           {' · '}
-          <span class="cedh-match-missing-count">{match.missingCards.length} to buy</span>
-          {match.missingCards.length > 0 && (
+          <span class="cedh-match-missing-count">{match.missingCount} to buy</span>
+          {match.missingCount > 0 && (
             <>
               {' · '}
               <span class="cedh-match-price">
@@ -146,27 +215,28 @@ function MatchCard({ match, rank }: { match: CedhMatch; rank: number }) {
           </a>
         </div>
 
-        {match.missingCards.length > 0 && (
-          <details class="cedh-missing">
-            <summary>
-              Missing {match.missingCards.length} card
-              {match.missingCards.length === 1 ? '' : 's'} — {cad(match.missingTotalCad)} to complete
-              {match.missingUnpricedCount > 0 && (
-                <span class="cedh-missing-note">
-                  {' '}({match.missingUnpricedCount} without a price)
-                </span>
-              )}
-            </summary>
-            <ul class="cedh-missing-list">
-              {match.missingCards.map((card) => (
-                <li class="cedh-missing-row">
-                  <span class="cedh-missing-name">{card.name}</span>
-                  <span class="cedh-missing-price">{cad(card.cad)}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <details class="cedh-missing">
+          <summary>
+            Full decklist — {match.ownedCount} owned, {match.missingCount} to buy
+            {match.missingCount > 0 && <> ({cad(match.missingTotalCad)})</>}
+            {match.missingUnpricedCount > 0 && (
+              <span class="cedh-missing-note">
+                {' '}· {match.missingUnpricedCount} without a price
+              </span>
+            )}
+          </summary>
+
+          <div class="cedh-legend">
+            <span class="cedh-legend-item is-missing">■ Missing (buy)</span>
+            <span class="cedh-legend-item is-owned">✓ Owned</span>
+          </div>
+
+          <div class="cedh-groups">
+            {match.cardGroups.map((group) => (
+              <CardGroup group={group} />
+            ))}
+          </div>
+        </details>
       </div>
     </div>
   );

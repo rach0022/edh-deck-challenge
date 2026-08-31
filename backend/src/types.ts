@@ -44,6 +44,7 @@ export interface MoxfieldCardEntry {
 export interface MoxfieldCard {
   name: string;
   color_identity: string[];
+  scryfall_id?: string;
   set: string;
   cn: string;
   type_line?: string;
@@ -272,9 +273,35 @@ export interface PotentialComboCard {
 // ─── cEDH match feature types ───────────────────────────────────────────────
 
 /**
+ * A single card in a reference deck's decklist, captured at corpus-build time
+ * from Moxfield. Self-contained so it can be used for display, matching, and
+ * cross-referencing (via scryfallId) without extra lookups.
+ */
+export interface DecklistCard {
+  /** Display name, e.g. "Faeburrow Elder" */
+  name: string;
+  /**
+   * Cheapest known price for the printing in this decklist, in USD
+   * (Moxfield's prices.usd, falling back to usd_foil). null if unavailable.
+   */
+  value: number | null;
+  /**
+   * All types parsed from the card's type line, in order — supertypes and
+   * types before the em-dash, then subtypes. For DFCs/split cards only the
+   * front face is used. e.g. "Legendary Creature — Merfolk Wizard" →
+   * ["Legendary", "Creature", "Merfolk", "Wizard"].
+   */
+  types: string[];
+  /** Mana cost string, e.g. "{1}{G}{W}" ("" for lands / no cost). */
+  manaCost: string;
+  /** Scryfall card id for cross-referencing, or null if unknown. */
+  scryfallId: string | null;
+}
+
+/**
  * A reference cEDH deck from the cEDH Decklist Database, enriched with the
- * full set of card names fetched from Moxfield. This is what the build script
- * produces and what gets stored in the cache as the reference corpus.
+ * full decklist fetched from Moxfield. This is what the build script produces
+ * and what gets stored in the cache as the reference corpus.
  */
 export interface CedhReferenceDeck {
   /** Moxfield public id */
@@ -291,15 +318,8 @@ export interface CedhReferenceDeck {
   colors: string[];
   /** Moxfield URL */
   moxfieldUrl: string;
-  /** Full set of mainboard + commander card names (deduplicated) */
-  cardNames: string[];
-  /**
-   * Map of normalized card name → cheapest known USD price for the printing
-   * used in this decklist (from Moxfield's `prices.usd`, falling back to
-   * `usd_foil`). Missing entries mean no price was available. Keyed by the
-   * same normalized name used for matching so lookups are consistent.
-   */
-  cardPrices: Record<string, number>;
+  /** The full decklist (commanders + mainboard), one entry per distinct card. */
+  decklist: DecklistCard[];
 }
 
 /** The full reference corpus produced by the build script. */
@@ -325,13 +345,40 @@ export interface UserDeckSummary {
  * A card the user is missing from a reference deck, with pricing.
  * Prices are for the printing used in the reference decklist.
  */
-export interface MissingCard {
+/**
+ * A single card in a reference deck, annotated with whether the user owns it,
+ * its type category, and its price. Prices are for the printing used in the
+ * reference decklist.
+ */
+export interface ReferenceCard {
   /** Display name */
   name: string;
-  /** Cheapest known price for this printing, in USD. null if unknown. */
+  /** Front-side type category (Creature, Artifact, ...) */
+  type: string;
+  /** All parsed types (supertypes, types, subtypes) */
+  types: string[];
+  /** Mana cost string, e.g. "{1}{G}{W}" */
+  manaCost: string;
+  /** Scryfall id for cross-referencing, or null */
+  scryfallId: string | null;
+  /** Whether the user already owns this card (in any of their decks) */
+  owned: boolean;
+  /** Known price for this printing, in USD. null if unknown. */
   usd: number | null;
   /** Converted price in CAD using the cached FX rate. null if usd is null. */
   cad: number | null;
+}
+
+/** Cards of one type category within a match, split into missing/owned. */
+export interface ReferenceCardGroup {
+  /** Type category name (Creature, Artifact, ...) */
+  type: string;
+  /** All cards of this type in the reference deck, missing first then owned */
+  cards: ReferenceCard[];
+  /** Count of cards the user is missing in this group */
+  missingCount: number;
+  /** Count of cards the user owns in this group */
+  ownedCount: number;
 }
 
 /** A single scored match between the user's collection and a reference deck. */
@@ -343,12 +390,17 @@ export interface CedhMatch {
   ownedCount: number;
   /** Total cards in the reference deck */
   totalCount: number;
-  /** Cards in the reference deck the user does NOT own, priced, sorted by name */
-  missingCards: MissingCard[];
+  /**
+   * The full reference decklist, grouped by card type in canonical order.
+   * Each card is flagged owned/missing and priced.
+   */
+  cardGroups: ReferenceCardGroup[];
   /** Sum of known missing-card prices in USD */
   missingTotalUsd: number;
   /** Sum of known missing-card prices in CAD */
   missingTotalCad: number;
+  /** Number of missing cards */
+  missingCount: number;
   /** Number of missing cards with no known price (excluded from the totals) */
   missingUnpricedCount: number;
 }

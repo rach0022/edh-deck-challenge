@@ -26,8 +26,9 @@ function ManaCost({ cost }: { cost: string }) {
   return (
     <span class="mana-cost">
       {symbols.map((sym) => {
-        // Scryfall expects uppercase symbols without braces
-        const code = sym.replace(/[{}]/g, '');
+        // Scryfall symbol filenames strip the braces and the "/" separator:
+        // {B} → B, {B/P} → BP (Phyrexian), {W/U} → WU (hybrid), {2/W} → 2W.
+        const code = sym.replace(/[{}]/g, '').replace(/\//g, '');
         return (
           <img
             src={`https://svgs.scryfall.io/card-symbols/${code}.svg`}

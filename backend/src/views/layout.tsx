@@ -1474,37 +1474,116 @@ const css = `
     font-weight: 400;
   }
 
-  .cedh-missing-list {
-    list-style: none;
-    padding: 0.75rem 0 0;
-    margin: 0;
-    columns: 2;
-    column-gap: 1.5rem;
+  /* Legend: owned vs missing */
+  .cedh-legend {
+    display: flex;
+    gap: 1.25rem;
+    padding: 0.75rem 0 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 600;
   }
 
-  .cedh-missing-row {
+  .cedh-legend-item.is-missing { color: #f0c040; }
+  .cedh-legend-item.is-owned { color: var(--accent-green); }
+
+  /* Card groups by type */
+  .cedh-groups {
+    columns: 2;
+    column-gap: 1.75rem;
+    padding-top: 0.5rem;
+  }
+
+  .cedh-group {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+
+  .cedh-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.3rem;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .cedh-group-type {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .cedh-group-counts {
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .cedh-group-missing { color: #f0c040; }
+  .cedh-group-owned { color: var(--accent-green); }
+
+  .cedh-card-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .cedh-card-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 0.75rem;
-    padding: 3px 0;
-    break-inside: avoid;
+    padding: 2px 0;
   }
 
-  .cedh-missing-name {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
+  .cedh-card-row .cedh-card-name {
+    font-size: 0.84rem;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .cedh-missing-price {
-    color: var(--accent-green);
-    font-size: 0.82rem;
+  .cedh-card-row .cedh-card-price {
+    font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
     flex-shrink: 0;
+  }
+
+  /* Missing cards: amber, prominent. Owned: green, dimmed with a check. */
+  .cedh-card-row.is-missing .cedh-card-name { color: var(--text-secondary); }
+  .cedh-card-row.is-missing .cedh-card-price { color: #f0c040; }
+
+  .cedh-card-row.is-owned { opacity: 0.7; }
+  .cedh-card-row.is-owned .cedh-card-name { color: var(--accent-green); }
+  .cedh-card-row.is-owned .cedh-card-price { color: var(--text-muted); }
+
+  .cedh-card-check { color: var(--accent-green); font-weight: 700; }
+
+  .cedh-mana-cost {
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+
+  .cedh-mana-cost img {
+    width: 13px;
+    height: 13px;
+  }
+
+  .cedh-card-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .cedh-card-link:hover {
+    color: inherit;
+    text-decoration: underline;
   }
 
   /* ─── User Collection Decks ──────────────── */
@@ -1668,7 +1747,7 @@ const css = `
     .loading-spinner { width: 48px; height: 48px; }
     .cedh-match { flex-direction: column; }
     .cedh-match-img, .cedh-match-hero .cedh-match-img { width: 100px; }
-    .cedh-missing-list { columns: 1; }
+    .cedh-groups { columns: 1; }
     .cedh-userdecks-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   }
 

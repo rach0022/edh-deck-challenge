@@ -21,11 +21,13 @@ import type { MoxfieldService } from './moxfield.js';
 import { extractCommanders } from '../domain/commander-extractor.js';
 import { resolveColorIdentity } from '../domain/color-identity.js';
 import { buildCardSet, normalizeCardName, rankMatches } from '../domain/deck-similarity.js';
+import { parseTypeLine } from '../domain/card-type.js';
 import type { FxService } from './fx.js';
 import type {
   CedhCorpus,
   CedhMatchResponse,
   Color,
+  DecklistCard,
   MoxfieldDeckDetail,
   UserDeckSummary,
 } from '../types.js';
@@ -47,47 +49,65 @@ function coercePrice(value: unknown): number | null {
 }
 
 /**
- * Extracts the full set of card names (commanders + mainboard) from a
- * Moxfield deck detail, plus a map of normalized card name → cheapest known
- * USD price for that printing (prices.usd, falling back to usd_foil).
+ * Extracts the full decklist (commanders + mainboard) from a Moxfield deck
+ * detail as an array of self-contained DecklistCard objects: name, USD value,
+ * parsed types, mana cost, and Scryfall id.
+ *
+ * Cards are de-duplicated by normalized name (Moxfield can list a card in both
+ * the commander and mainboard zones); on a duplicate the cheaper value is kept.
  *
  * Shared with the build script so the corpus and the user's collection are
  * constructed identically.
  */
-export function extractDeckCards(deck: MoxfieldDeckDetail): {
-  names: string[];
-  prices: Record<string, number>;
-} {
-  const names = new Set<string>();
-  const prices: Record<string, number> = {};
+export function extractDeckCards(deck: MoxfieldDeckDetail): DecklistCard[] {
+  const byKey = new Map<string, DecklistCard>();
 
-  const addEntry = (entry: { card?: { name?: string; prices?: { usd?: unknown; usd_foil?: unknown } } }) => {
-    const name = entry?.card?.name;
+  const addEntry = (entry: {
+    card?: {
+      name?: string;
+      type_line?: string;
+      mana_cost?: string;
+      scryfall_id?: string;
+      prices?: { usd?: unknown; usd_foil?: unknown };
+    };
+  }) => {
+    const card = entry?.card;
+    const name = card?.name;
     if (!name) return;
-    names.add(name);
 
-    const usd = coercePrice(entry.card?.prices?.usd) ?? coercePrice(entry.card?.prices?.usd_foil);
-    if (usd != null) {
-      const key = normalizeCardName(name);
-      // Keep the cheapest if the same normalized name appears twice.
-      if (prices[key] == null || usd < prices[key]) {
-        prices[key] = usd;
+    const key = normalizeCardName(name);
+    const value = coercePrice(card?.prices?.usd) ?? coercePrice(card?.prices?.usd_foil);
+
+    const existing = byKey.get(key);
+    if (existing) {
+      // Keep the cheaper known value if the same card appears twice.
+      if (value != null && (existing.value == null || value < existing.value)) {
+        existing.value = value;
       }
+      return;
     }
+
+    byKey.set(key, {
+      name,
+      value,
+      types: parseTypeLine(card?.type_line ?? ''),
+      manaCost: card?.mana_cost ?? '',
+      scryfallId: card?.scryfall_id ?? null,
+    });
   };
 
   for (const entry of Object.values(deck.commanders ?? {})) addEntry(entry);
   for (const entry of Object.values(deck.mainboard ?? {})) addEntry(entry);
 
-  return { names: [...names], prices };
+  return [...byKey.values()];
 }
 
 /**
- * Convenience wrapper returning just the card names (used where prices aren't
- * needed, e.g. building the user's collection set).
+ * Convenience wrapper returning just the card names (used where the full
+ * card objects aren't needed, e.g. building the user's collection set).
  */
 export function extractDeckCardNames(deck: MoxfieldDeckDetail): string[] {
-  return extractDeckCards(deck).names;
+  return extractDeckCards(deck).map((c) => c.name);
 }
 
 export interface CedhService {

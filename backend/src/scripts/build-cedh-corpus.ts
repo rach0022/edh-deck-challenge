@@ -176,7 +176,7 @@ async function main(): Promise<void> {
     const label = `[${i + 1}/${planned.length}] ${p.title} — ${p.deckTitle} (${p.publicId})`;
     try {
       const detail = await moxfield.fetchDeckDetail(p.publicId);
-      const { names: cardNames, prices: cardPrices } = extractDeckCards(detail);
+      const decklist = extractDeckCards(detail);
 
       decks.push({
         publicId: p.publicId,
@@ -186,11 +186,10 @@ async function main(): Promise<void> {
         commanderImages: p.commanderImages,
         colors: p.colors,
         moxfieldUrl: p.moxfieldUrl,
-        cardNames,
-        cardPrices,
+        decklist,
       });
-      const pricedCount = Object.keys(cardPrices).length;
-      console.log(`✅ ${label} — ${cardNames.length} cards, ${pricedCount} priced`);
+      const pricedCount = decklist.filter((c) => c.value != null).length;
+      console.log(`✅ ${label} — ${decklist.length} cards, ${pricedCount} priced`);
     } catch (error) {
       failures++;
       if (error instanceof MoxfieldAPIError) {
