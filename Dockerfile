@@ -1,5 +1,5 @@
 # ─── EDH Deck Challenge API ──────────────────────────────────────────────────
-# Root-level Dockerfile for Fly.io deployment.
+# Root-level Dockerfile for local Docker development.
 # Build context is the repo root; all paths reference backend/.
 
 FROM node:26-slim AS base

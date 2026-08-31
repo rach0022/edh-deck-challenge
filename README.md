@@ -36,6 +36,44 @@ npm install
 npm run build
 ```
 
+## Running with Docker
+
+The easiest way to run the full app (API + Redis) locally is with Docker Compose.
+Everything runs in containers — no local Node or Redis setup required.
+
+```bash
+# Build and start in the background
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Stop and remove the containers
+docker compose down
+```
+
+Once running, open http://localhost:3000.
+
+### Choosing the port
+
+The host port is configurable via the `APP_PORT` environment variable. The
+container always listens on 3000 internally; `APP_PORT` only changes which port
+on your machine maps to it. It defaults to `3000` when unset.
+
+```bash
+# Run on a custom port — app available at http://localhost:8080
+APP_PORT=8080 docker compose up -d --build
+```
+
+Or set it persistently by copying `.env.example` to `.env` (Docker Compose loads
+`.env` from this directory automatically) and editing the value:
+
+```bash
+cp .env.example .env
+# then edit APP_PORT in .env
+docker compose up -d --build
+```
+
 ## Usage
 
 ```bash

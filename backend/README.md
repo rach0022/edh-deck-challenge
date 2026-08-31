@@ -21,7 +21,7 @@ No auth. No database. No sign-up. Just enter a username and go.
 | **Language** | TypeScript 5.8 | Strict mode, ES2022 target |
 | **Bundler** | tsc | Direct TypeScript compilation |
 | **Dev Server** | [tsx](https://github.com/privatenumber/tsx) | Hot-reload during development |
-| **Deployment** | Docker / Render / Railway / Fly.io | Multi-stage Dockerfile included |
+| **Deployment** | Docker | Multi-stage Dockerfile for local containerized runs |
 
 ---
 
@@ -918,17 +918,6 @@ Pair with [Upstash](https://upstash.com) free tier (10k commands/day) for cachin
 4. Deploy — auto-detects Dockerfile
 
 Free: $5 credit/month.
-
-### Option C: Fly.io
-
-```bash
-cd backend
-fly launch
-fly deploy
-fly secrets set UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=...
-```
-
-Free: 3 shared VMs (256MB each).
 
 ### Before you deploy: generate the cEDH corpus
 

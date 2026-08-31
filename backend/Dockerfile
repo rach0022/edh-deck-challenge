@@ -1,5 +1,5 @@
 # ─── EDH Deck Challenge API ──────────────────────────────────────────────────
-# Multi-stage build for Render / Railway / Fly.io (free tier) or any Docker host.
+# Multi-stage build for local Docker development on any Docker host.
 # Uses Puppeteer with system Chromium to keep the image smaller.
 
 FROM node:26-slim AS base

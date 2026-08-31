@@ -3,3 +3,7 @@ node_modules/
 dist/
 build/
 .DS_STORE
+
+# Local env overrides (keep .env.example tracked)
+.env
+!.env.example
