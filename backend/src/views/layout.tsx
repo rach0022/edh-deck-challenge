@@ -1292,6 +1292,360 @@ const css = `
     line-height: 1.6;
   }
 
+  /* ─── Build a cEDH Deck Page ─────────────── */
+
+  .cedh-matches {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 4rem;
+  }
+
+  .cedh-match {
+    position: relative;
+    display: flex;
+    gap: 1.5rem;
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+  }
+
+  .cedh-match:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    transform: translateY(-2px);
+  }
+
+  .cedh-match-hero {
+    border-color: var(--filled-border);
+    box-shadow: 0 0 32px rgba(52, 211, 153, 0.08);
+    background: rgba(52, 211, 153, 0.04);
+  }
+
+  .cedh-match-rank {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  .cedh-match-hero .cedh-match-rank {
+    color: var(--accent-green);
+    opacity: 0.9;
+  }
+
+  .cedh-match-img {
+    width: 120px;
+    height: auto;
+    align-self: flex-start;
+    border-radius: var(--radius-md);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    flex-shrink: 0;
+  }
+
+  .cedh-match-hero .cedh-match-img {
+    width: 160px;
+  }
+
+  .cedh-match-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .cedh-match-colors {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0.5rem;
+  }
+
+  .cedh-match-colors img {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  }
+
+  .cedh-match-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.2rem;
+  }
+
+  .cedh-match-hero .cedh-match-title {
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .cedh-match-subtitle {
+    color: var(--accent-green);
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .cedh-match-bar-container {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 100px;
+    height: 14px;
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    max-width: 520px;
+    margin-bottom: 0.5rem;
+  }
+
+  .cedh-match-bar {
+    height: 100%;
+    background: var(--accent-gradient);
+    border-radius: 100px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .cedh-match-stats {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .cedh-match-stats strong {
+    color: var(--accent-green);
+    font-size: 1.05rem;
+  }
+
+  .cedh-match-missing-count {
+    color: #f0c040;
+  }
+
+  .cedh-match-price {
+    color: var(--accent-green);
+    font-weight: 600;
+  }
+
+  .cedh-fx-note {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+  }
+
+  .cedh-fx-note strong {
+    color: var(--text-secondary);
+  }
+
+  .cedh-match-actions {
+    margin-bottom: 0.5rem;
+  }
+
+  .cedh-match-link {
+    font-size: 0.85rem;
+    color: #a9c7ff;
+    font-weight: 600;
+  }
+
+  .cedh-match-link:hover {
+    color: #cfe0ff;
+    text-decoration: underline;
+  }
+
+  .cedh-missing {
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 0.75rem;
+  }
+
+  .cedh-missing summary {
+    cursor: pointer;
+    color: #f0c040;
+    font-size: 0.88rem;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  .cedh-missing summary:hover {
+    color: #ffd870;
+  }
+
+  .cedh-missing-note {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .cedh-missing-list {
+    list-style: none;
+    padding: 0.75rem 0 0;
+    margin: 0;
+    columns: 2;
+    column-gap: 1.5rem;
+  }
+
+  .cedh-missing-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 3px 0;
+    break-inside: avoid;
+  }
+
+  .cedh-missing-name {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cedh-missing-price {
+    color: var(--accent-green);
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ─── User Collection Decks ──────────────── */
+
+  .cedh-collection-section {
+    margin-bottom: 3rem;
+  }
+
+  .cedh-userdecks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .cedh-userdeck {
+    position: relative;
+    display: block;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    background: var(--bg-surface);
+    min-height: 150px;
+    transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
+    text-decoration: none;
+  }
+
+  .cedh-userdeck:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+    text-decoration: none;
+  }
+
+  .cedh-userdeck-art {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+  }
+
+  .cedh-userdeck-art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(10, 10, 18, 0.2) 0%,
+      rgba(10, 10, 18, 0.6) 50%,
+      rgba(10, 10, 18, 0.94) 100%
+    );
+  }
+
+  .cedh-userdeck-body {
+    position: relative;
+    z-index: 1;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 150px;
+  }
+
+  .cedh-userdeck-colors {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 0.4rem;
+  }
+
+  .cedh-userdeck-colors img {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  }
+
+  .cedh-userdeck-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  }
+
+  .cedh-userdeck-cmdr {
+    color: #6ee7b7;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  }
+
+  .cedh-userdeck-count {
+    color: #cfc9dd;
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  }
+
+  /* ─── Home mode toggle ───────────────────── */
+
+  .mode-toggle {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    border: 0;
+    padding: 0;
+    margin-inline: 0;
+  }
+
+  .mode-option {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .mode-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mode-option-label {
+    display: block;
+    padding: 0.65rem 1.5rem;
+    border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    font-weight: 600;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+  }
+
+  .mode-option input:checked + .mode-option-label {
+    border-color: var(--accent-purple);
+    background: rgba(168, 85, 247, 0.12);
+    color: var(--text-primary);
+  }
+
+  .mode-option input:focus-visible + .mode-option-label {
+    outline: 3px solid var(--accent-green);
+    outline-offset: 2px;
+  }
+
   /* ─── Responsive ────────────────────────── */
 
   @media (max-width: 768px) {
@@ -1312,6 +1666,10 @@ const css = `
     .loading-container { padding: 2rem 1rem; }
     .loading-title { font-size: 1.4rem; }
     .loading-spinner { width: 48px; height: 48px; }
+    .cedh-match { flex-direction: column; }
+    .cedh-match-img, .cedh-match-hero .cedh-match-img { width: 100px; }
+    .cedh-missing-list { columns: 1; }
+    .cedh-userdecks-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   }
 
   /* ─── Accessibility: Keyboard Focus ─────── */

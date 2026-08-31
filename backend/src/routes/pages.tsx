@@ -14,8 +14,10 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { ChallengeService } from '../services/challenge.js';
 import type { ProgressEvent } from '../services/challenge.js';
+import type { CedhService } from '../services/cedh.js';
 import { HomePage } from '../views/home.js';
 import { ChallengePage } from '../views/challenge.js';
+import { CedhMatchPage } from '../views/cedh-match.js';
 import { DeckDetailPage } from '../views/deck-detail.js';
 import { LoadingPage } from '../views/loading.js';
 import { ErrorPage } from '../views/error.js';
@@ -24,8 +26,18 @@ import {
   MoxfieldTimeoutError,
 } from '../services/moxfield.js';
 
-export function createPageRoutes(challengeService: ChallengeService): Hono {
+export function createPageRoutes(
+  challengeService: ChallengeService,
+  cedhService: CedhService,
+): Hono {
   const app = new Hono();
+
+  /** Shared username validation. Returns trimmed username or null. */
+  function validUsername(raw: string | undefined): string | null {
+    const username = raw?.trim();
+    if (!username || username.length < 2 || username.length > 50) return null;
+    return username;
+  }
 
   /**
    * GET / — Landing page
@@ -35,7 +47,23 @@ export function createPageRoutes(challengeService: ChallengeService): Hono {
   });
 
   /**
-   * GET /challenge?username=X — Form redirect target
+   * GET /search?username=X&mode=challenge|cedh — Home form dispatch target.
+   * Routes to the appropriate loading page based on the selected mode.
+   */
+  app.get('/search', (c) => {
+    const username = c.req.query('username')?.trim();
+    if (!username) {
+      return c.redirect('/');
+    }
+    const mode = c.req.query('mode') === 'cedh' ? 'cedh' : 'challenge';
+    const encoded = encodeURIComponent(username);
+    return c.redirect(
+      mode === 'cedh' ? `/cedh/loading/${encoded}` : `/loading/${encoded}`,
+    );
+  });
+
+  /**
+   * GET /challenge?username=X — Legacy form redirect target
    * Redirects to /loading/:username for the loading experience
    */
   app.get('/challenge', (c) => {
@@ -63,7 +91,7 @@ export function createPageRoutes(challengeService: ChallengeService): Hono {
       );
     }
 
-    return c.html(<LoadingPage username={username} />);
+    return c.html(<LoadingPage username={username} mode="challenge" />);
   });
 
   /**
@@ -150,6 +178,132 @@ export function createPageRoutes(challengeService: ChallengeService): Hono {
         500
       );
     }
+  });
+
+  /**
+   * GET /cedh/loading/:username — Loading page for the cEDH match flow
+   */
+  app.get('/cedh/loading/:username', (c) => {
+    const username = validUsername(c.req.param('username'));
+    if (!username) {
+      return c.html(
+        <ErrorPage
+          title="Invalid Username"
+          message="Username must be between 2 and 50 characters."
+        />,
+        400,
+      );
+    }
+    return c.html(<LoadingPage username={username} mode="cedh" />);
+  });
+
+  /**
+   * GET /cedh/:username — cEDH match results page
+   */
+  app.get('/cedh/:username', async (c) => {
+    const username = validUsername(c.req.param('username'));
+    if (!username) {
+      return c.html(
+        <ErrorPage
+          title="Invalid Username"
+          message="Username must be between 2 and 50 characters."
+        />,
+        400,
+      );
+    }
+
+    try {
+      const { data, cached } = await cedhService.getMatches(username);
+      return c.html(<CedhMatchPage result={data} cached={cached} />);
+    } catch (error) {
+      if (error instanceof MoxfieldUserNotFoundError) {
+        return c.html(
+          <ErrorPage
+            title="User Not Found"
+            message={`Moxfield user "${username}" was not found. Check the spelling and try again.`}
+          />,
+          404,
+        );
+      }
+      if (error instanceof MoxfieldTimeoutError) {
+        return c.html(
+          <ErrorPage
+            title="Connection Timeout"
+            message="Could not reach Moxfield. The service may be temporarily unavailable. Please try again in a few minutes."
+          />,
+          504,
+        );
+      }
+      console.error('cEDH page render error:', error);
+      return c.html(
+        <ErrorPage
+          title="Something Went Wrong"
+          message="An unexpected error occurred. Please try again later."
+        />,
+        500,
+      );
+    }
+  });
+
+  /**
+   * GET /api/cedh/:username/progress — SSE stream for cEDH match progress
+   */
+  app.get('/api/cedh/:username/progress', (c) => {
+    const username = validUsername(c.req.param('username'));
+    if (!username) {
+      return c.json({ error: 'Invalid username' }, 400);
+    }
+
+    return streamSSE(c, async (stream) => {
+      let completed = false;
+      try {
+        await cedhService.getMatches(username, (event: ProgressEvent) => {
+          if (completed) return;
+          stream.writeSSE({ event: 'progress', data: JSON.stringify(event) });
+        });
+
+        completed = true;
+        await stream.writeSSE({
+          event: 'complete',
+          data: JSON.stringify({ redirect: `/cedh/${encodeURIComponent(username)}` }),
+        });
+      } catch (error) {
+        completed = true;
+        let errorMessage = 'An unexpected error occurred.';
+        let errorType = 'unknown';
+
+        if (error instanceof MoxfieldUserNotFoundError) {
+          errorMessage = `Moxfield user "${username}" was not found.`;
+          errorType = 'not_found';
+        } else if (error instanceof MoxfieldTimeoutError) {
+          errorMessage = 'Could not reach Moxfield. Please try again.';
+          errorType = 'timeout';
+        } else {
+          console.error('cEDH SSE progress error:', error);
+        }
+
+        await stream.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ message: errorMessage, type: errorType }),
+        });
+      }
+    });
+  });
+
+  /**
+   * POST /cedh/refresh/:username — Force cEDH cache refresh, redirect back
+   */
+  app.post('/cedh/refresh/:username', async (c) => {
+    const username = c.req.param('username').trim();
+    if (!username) {
+      return c.redirect('/');
+    }
+    try {
+      await cedhService.refreshMatches(username);
+    } catch (error) {
+      console.error('cEDH refresh error:', error);
+    }
+    return c.redirect(`/cedh/${encodeURIComponent(username)}`);
   });
 
   /**

@@ -54,6 +54,11 @@ export interface MoxfieldCard {
     large?: string;
     art_crop?: string;
   };
+  prices?: {
+    usd?: number | string | null;
+    usd_foil?: number | string | null;
+    [key: string]: unknown;
+  };
   card_faces?: MoxfieldCardFace[];
 }
 
@@ -262,6 +267,113 @@ export interface PotentialComboCard {
     produces: string[];
     spellbookUrl: string;
   }[];
+}
+
+// ─── cEDH match feature types ───────────────────────────────────────────────
+
+/**
+ * A reference cEDH deck from the cEDH Decklist Database, enriched with the
+ * full set of card names fetched from Moxfield. This is what the build script
+ * produces and what gets stored in the cache as the reference corpus.
+ */
+export interface CedhReferenceDeck {
+  /** Moxfield public id */
+  publicId: string;
+  /** Archetype title from the database (e.g. "Thrasios Tymna Midrange") */
+  title: string;
+  /** Individual decklist title from the database (e.g. "Turtleguide") */
+  deckTitle: string;
+  /** Commander names */
+  commanders: string[];
+  /** Commander card image URLs (from the database, Scryfall-hosted) */
+  commanderImages: (string | null)[];
+  /** Color identity letters from the database, e.g. ["b","g","u","w"] */
+  colors: string[];
+  /** Moxfield URL */
+  moxfieldUrl: string;
+  /** Full set of mainboard + commander card names (deduplicated) */
+  cardNames: string[];
+  /**
+   * Map of normalized card name → cheapest known USD price for the printing
+   * used in this decklist (from Moxfield's `prices.usd`, falling back to
+   * `usd_foil`). Missing entries mean no price was available. Keyed by the
+   * same normalized name used for matching so lookups are consistent.
+   */
+  cardPrices: Record<string, number>;
+}
+
+/** The full reference corpus produced by the build script. */
+export interface CedhCorpus {
+  /** ISO timestamp of when the corpus was generated */
+  generatedAt: string;
+  /** Number of reference decks */
+  deckCount: number;
+  decks: CedhReferenceDeck[];
+}
+
+/** A summary of one of the user's own decks, used in the cEDH match page. */
+export interface UserDeckSummary {
+  publicId: string;
+  name: string;
+  commanders: CommanderSlotInfo[];
+  colors: Color[];
+  moxfieldUrl: string;
+  cardCount: number;
+}
+
+/**
+ * A card the user is missing from a reference deck, with pricing.
+ * Prices are for the printing used in the reference decklist.
+ */
+export interface MissingCard {
+  /** Display name */
+  name: string;
+  /** Cheapest known price for this printing, in USD. null if unknown. */
+  usd: number | null;
+  /** Converted price in CAD using the cached FX rate. null if usd is null. */
+  cad: number | null;
+}
+
+/** A single scored match between the user's collection and a reference deck. */
+export interface CedhMatch {
+  deck: CedhReferenceDeck;
+  /** Fraction of the reference deck's cards the user already owns (0..1) */
+  ownedFraction: number;
+  /** Number of reference-deck cards the user owns */
+  ownedCount: number;
+  /** Total cards in the reference deck */
+  totalCount: number;
+  /** Cards in the reference deck the user does NOT own, priced, sorted by name */
+  missingCards: MissingCard[];
+  /** Sum of known missing-card prices in USD */
+  missingTotalUsd: number;
+  /** Sum of known missing-card prices in CAD */
+  missingTotalCad: number;
+  /** Number of missing cards with no known price (excluded from the totals) */
+  missingUnpricedCount: number;
+}
+
+/** FX conversion metadata shown on the page. */
+export interface FxInfo {
+  /** USD → CAD multiplier used for all conversions on this response */
+  usdToCad: number;
+  /** ISO timestamp of when the rate was last fetched */
+  fetchedAt: string;
+  /** Whether a live rate was available (false = fell back to a default) */
+  live: boolean;
+}
+
+/** Full response for the "Build a cEDH Deck" page. */
+export interface CedhMatchResponse {
+  username: string;
+  /** The user's legal commander decks used to build their collection */
+  userDecks: UserDeckSummary[];
+  /** Total distinct cards across all the user's decks */
+  collectionSize: number;
+  /** Top matches, best first */
+  matches: CedhMatch[];
+  /** FX rate info used to convert all prices to CAD */
+  fx: FxInfo;
 }
 
 /** Combo data attached to a deck */

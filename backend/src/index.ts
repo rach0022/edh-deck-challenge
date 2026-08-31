@@ -26,6 +26,8 @@ import { createCacheService } from './services/cache.js';
 import { createMoxfieldService } from './services/moxfield.js';
 import { createSpellbookService } from './services/spellbook.js';
 import { createChallengeService } from './services/challenge.js';
+import { createCedhService } from './services/cedh.js';
+import { createFxService } from './services/fx.js';
 import { createChallengeRoutes } from './routes/challenge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createPageRoutes } from './routes/pages.js';
@@ -38,6 +40,8 @@ const cache = createCacheService(config);
 const moxfield = createMoxfieldService(config);
 const spellbook = createSpellbookService();
 const challengeService = createChallengeService(config, cache, moxfield, spellbook);
+const fxService = createFxService(cache);
+const cedhService = createCedhService(config, cache, moxfield, fxService);
 
 // ─── Create Hono app ────────────────────────────────────────────────────────
 
@@ -72,7 +76,7 @@ app.get('/favicon.ico', (c) => {
   return c.redirect('/favicon.svg', 301);
 });
 
-app.route('/', createPageRoutes(challengeService));
+app.route('/', createPageRoutes(challengeService, cedhService));
 
 // 404 fallback
 app.notFound((c) => {

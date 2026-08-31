@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc && cp -r src/public dist/public",
+    "build": "tsc && mkdir -p dist/public dist/data && cp -r src/public/. dist/public/ && cp -r src/data/. dist/data/",
+    "build:cedh": "tsx src/scripts/build-cedh-corpus.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },

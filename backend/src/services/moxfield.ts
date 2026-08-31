@@ -61,6 +61,21 @@ export interface MoxfieldService {
   shutdown(): Promise<void>;
 }
 
+/**
+ * Extracts a Moxfield deck publicId from a URL, if the URL is a Moxfield
+ * deck link. Handles variations like:
+ *   https://www.moxfield.com/decks/{id}
+ *   https://moxfield.com/decks/{id}
+ *   http://moxfield.com/decks/{id}/whatever
+ *   moxfield.com/decks/{id}?foo=bar
+ * Returns null for non-Moxfield or non-deck URLs.
+ */
+export function parseMoxfieldDeckId(url: string): string | null {
+  if (typeof url !== 'string') return null;
+  const match = url.match(/moxfield\.com\/decks\/([A-Za-z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
 export function createMoxfieldService(config: AppConfig): MoxfieldService {
   let browser: Browser | null = null;
   let page: Page | null = null;

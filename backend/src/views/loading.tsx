@@ -8,14 +8,46 @@ import { Layout } from './layout.js';
 
 interface LoadingPageProps {
   username: string;
+  /** Which flow this loading screen feeds into. Defaults to 'challenge'. */
+  mode?: 'challenge' | 'cedh';
 }
 
-export function LoadingPage({ username }: LoadingPageProps) {
-  const sseUrl = `/api/challenge/${encodeURIComponent(username)}/progress`;
-  const challengeUrl = `/challenge/${encodeURIComponent(username)}`;
+/** Phase rows shown for each mode. id must match a phaseMap target below. */
+const PHASE_ROWS: Record<'challenge' | 'cedh', { id: string; label: string }[]> = {
+  challenge: [
+    { id: 'phase-connecting', label: 'Connect to Moxfield' },
+    { id: 'phase-loading-decks', label: 'Load deck data' },
+    { id: 'phase-organizing', label: 'Organize into color slots' },
+    { id: 'phase-combos', label: 'Search for combos' },
+    { id: 'phase-complete', label: 'Finalize results' },
+  ],
+  cedh: [
+    { id: 'phase-connecting', label: 'Connect to Moxfield' },
+    { id: 'phase-loading-decks', label: 'Load your decks' },
+    { id: 'phase-matching', label: 'Match against cEDH decks' },
+    { id: 'phase-complete', label: 'Finalize results' },
+  ],
+};
+
+export function LoadingPage({ username, mode = 'challenge' }: LoadingPageProps) {
+  const sseUrl =
+    mode === 'cedh'
+      ? `/api/cedh/${encodeURIComponent(username)}/progress`
+      : `/api/challenge/${encodeURIComponent(username)}/progress`;
+  const redirectUrl =
+    mode === 'cedh'
+      ? `/cedh/${encodeURIComponent(username)}`
+      : `/challenge/${encodeURIComponent(username)}`;
+
+  const title =
+    mode === 'cedh'
+      ? `Loading ${username} — Build a cEDH Deck`
+      : `Loading ${username} — EDH 32 Deck Challenge`;
+
+  const phaseRows = PHASE_ROWS[mode];
 
   return (
-    <Layout title={`Loading ${username} — EDH 32 Deck Challenge`}>
+    <Layout title={title}>
       <div class="loading-container">
         <div class="loading-spinner-wrapper">
           <div class="loading-spinner" />
@@ -34,26 +66,12 @@ export function LoadingPage({ username }: LoadingPageProps) {
         <div class="loading-detail" id="status-detail" aria-live="polite"></div>
 
         <div class="loading-phases" id="phases-list">
-          <div class="phase-item" id="phase-connecting">
-            <span class="phase-icon" aria-hidden="true">⏳</span>
-            <span class="phase-label">Connect to Moxfield</span>
-          </div>
-          <div class="phase-item" id="phase-loading-decks">
-            <span class="phase-icon" aria-hidden="true">⏳</span>
-            <span class="phase-label">Load deck data</span>
-          </div>
-          <div class="phase-item" id="phase-organizing">
-            <span class="phase-icon" aria-hidden="true">⏳</span>
-            <span class="phase-label">Organize into color slots</span>
-          </div>
-          <div class="phase-item" id="phase-combos">
-            <span class="phase-icon" aria-hidden="true">⏳</span>
-            <span class="phase-label">Search for combos</span>
-          </div>
-          <div class="phase-item" id="phase-complete">
-            <span class="phase-icon" aria-hidden="true">⏳</span>
-            <span class="phase-label">Finalize results</span>
-          </div>
+          {phaseRows.map((row) => (
+            <div class="phase-item" id={row.id}>
+              <span class="phase-icon" aria-hidden="true">⏳</span>
+              <span class="phase-label">{row.label}</span>
+            </div>
+          ))}
         </div>
 
         <p class="loading-hint">
@@ -62,12 +80,12 @@ export function LoadingPage({ username }: LoadingPageProps) {
         </p>
       </div>
 
-      <script dangerouslySetInnerHTML={{ __html: loadingScript(sseUrl, challengeUrl) }} />
+      <script dangerouslySetInnerHTML={{ __html: loadingScript(sseUrl, redirectUrl, phaseRows.map((r) => r.id)) }} />
     </Layout>
   );
 }
 
-function loadingScript(sseUrl: string, challengeUrl: string): string {
+function loadingScript(sseUrl: string, redirectUrl: string, phaseOrderIds: string[]): string {
   return `
 (function() {
   var progressBar = document.getElementById('progress-bar');
@@ -82,17 +100,20 @@ function loadingScript(sseUrl: string, challengeUrl: string): string {
     'loading-decks': 'phase-loading-decks',
     'organizing': 'phase-organizing',
     'combos': 'phase-combos',
+    'matching': 'phase-matching',
     'finalizing': 'phase-complete',
     'complete': 'phase-complete'
   };
 
-  var phaseOrder = ['phase-connecting', 'phase-loading-decks', 'phase-organizing', 'phase-combos', 'phase-complete'];
+  var phaseOrder = ${JSON.stringify(phaseOrderIds)};
   var completedPhases = new Set();
   var currentPhaseId = null;
 
   function setPhaseActive(phase) {
     var elementId = phaseMap[phase];
     if (!elementId) return;
+    // A phase may map to an id not present in this mode's list; ignore it.
+    if (phaseOrder.indexOf(elementId) === -1) return;
 
     // Mark all phases before this one as complete
     for (var i = 0; i < phaseOrder.length; i++) {
@@ -184,11 +205,11 @@ function loadingScript(sseUrl: string, challengeUrl: string): string {
     progressText.textContent = 'Error';
   });
 
-  // Fallback: if nothing happens in 90s, just go to the challenge page directly
+  // Fallback: if nothing happens in 90s, just go to the results page directly
   setTimeout(function() {
     if (source.readyState !== 2) {
       source.close();
-      window.location.href = ${JSON.stringify(challengeUrl)};
+      window.location.href = ${JSON.stringify(redirectUrl)};
     }
   }, 90000);
 })();

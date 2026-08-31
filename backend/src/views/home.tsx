@@ -17,17 +17,29 @@ export function HomePage() {
         </p>
 
         <div class="hero-search">
-          <form class="search-form" action="/challenge" method="get">
-            <input
-              type="text"
-              name="username"
-              placeholder="Enter Moxfield username..."
-              required
-              minLength={2}
-              maxLength={50}
-              autofocus
-            />
-            <button type="submit">Check Progress</button>
+          <form class="search-form-wrap" action="/search" method="get">
+            <fieldset class="mode-toggle" aria-label="What do you want to check?">
+              <label class="mode-option">
+                <input type="radio" name="mode" value="challenge" checked />
+                <span class="mode-option-label">📊 32 Deck Challenge</span>
+              </label>
+              <label class="mode-option">
+                <input type="radio" name="mode" value="cedh" />
+                <span class="mode-option-label">⚔️ Build a cEDH Deck</span>
+              </label>
+            </fieldset>
+            <div class="search-form">
+              <input
+                type="text"
+                name="username"
+                placeholder="Enter Moxfield username..."
+                required
+                minLength={2}
+                maxLength={50}
+                autofocus
+              />
+              <button type="submit">Go</button>
+            </div>
           </form>
           <p class="search-hint">
             First lookup takes 10-30 seconds while we fetch your decks from Moxfield.
@@ -47,6 +59,14 @@ export function HomePage() {
             <p>
               Each filled slot shows your commander's card art from Scryfall.
               Partners and multi-deck slots supported.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h3>⚔️ cEDH Match</h3>
+            <p>
+              Switch to "Build a cEDH Deck" to see which competitive decks from
+              the cEDH Decklist Database you're closest to owning — with a buy
+              list of the cards you're missing.
             </p>
           </div>
           <div class="feature-card">
