@@ -5,14 +5,14 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_OPTIONS=--no-deprecation tsx watch src/index.ts",
     "build": "tsc && mkdir -p dist/public dist/data && cp -r src/public/. dist/public/ && cp -r src/data/. dist/data/",
-    "build:cedh": "tsx src/scripts/build-cedh-corpus.ts",
+    "build:cedh": "NODE_OPTIONS=--no-deprecation tsx src/scripts/build-cedh-corpus.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "utils": "tsx utils/src/index.ts",
+    "utils": "NODE_OPTIONS=--no-deprecation tsx utils/src/index.ts",
     "utils:build": "tsc"
   },
   "repository": {

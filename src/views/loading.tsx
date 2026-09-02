@@ -9,11 +9,17 @@ import { Layout } from './layout.js';
 interface LoadingPageProps {
   username: string;
   /** Which flow this loading screen feeds into. Defaults to 'challenge'. */
-  mode?: 'challenge' | 'cedh';
+  mode?: 'challenge' | 'cedh' | 'build';
+  /** Selected primary commander — required when mode='build'. */
+  commander?: string;
+  /** Optional partner commander (build mode). */
+  partner?: string | null;
+  /** Optional companion (build mode). */
+  companion?: string | null;
 }
 
 /** Phase rows shown for each mode. id must match a phaseMap target below. */
-const PHASE_ROWS: Record<'challenge' | 'cedh', { id: string; label: string }[]> = {
+const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build', { id: string; label: string }[]> = {
   challenge: [
     { id: 'phase-connecting', label: 'Connect to Moxfield' },
     { id: 'phase-loading-decks', label: 'Load deck data' },
@@ -27,22 +33,52 @@ const PHASE_ROWS: Record<'challenge' | 'cedh', { id: string; label: string }[]> 
     { id: 'phase-matching', label: 'Match against cEDH decks' },
     { id: 'phase-complete', label: 'Finalize results' },
   ],
+  build: [
+    { id: 'phase-connecting', label: 'Connect to Moxfield' },
+    { id: 'phase-loading-decks', label: 'Load your decks' },
+    { id: 'phase-matching', label: 'Fetch recommendations' },
+    { id: 'phase-complete', label: 'Finalize results' },
+  ],
 };
 
-export function LoadingPage({ username, mode = 'challenge' }: LoadingPageProps) {
-  const sseUrl =
-    mode === 'cedh'
-      ? `/api/cedh/${encodeURIComponent(username)}/progress`
-      : `/api/challenge/${encodeURIComponent(username)}/progress`;
-  const redirectUrl =
-    mode === 'cedh'
-      ? `/cedh/${encodeURIComponent(username)}`
-      : `/challenge/${encodeURIComponent(username)}`;
+/**
+ * Builds the `?commander=…&partner=…&companion=…` query string for the
+ * build-flow SSE + redirect URLs. Mirrors the routes' construction
+ * (commander always present; partner/companion emitted only when set).
+ */
+function buildSelectionQuery(
+  commander: string,
+  partner?: string | null,
+  companion?: string | null,
+): string {
+  const params = new URLSearchParams();
+  params.set('commander', commander);
+  if (partner) params.set('partner', partner);
+  if (companion) params.set('companion', companion);
+  return params.toString();
+}
+
+export function LoadingPage({ username, mode = 'challenge', commander = '', partner = null, companion = null }: LoadingPageProps) {
+  let sseUrl: string;
+  let redirectUrl: string;
+  if (mode === 'build') {
+    const query = buildSelectionQuery(commander, partner, companion);
+    sseUrl = `/api/build/${encodeURIComponent(username)}/progress?${query}`;
+    redirectUrl = `/build/${encodeURIComponent(username)}?${query}`;
+  } else if (mode === 'cedh') {
+    sseUrl = `/api/cedh/${encodeURIComponent(username)}/progress`;
+    redirectUrl = `/cedh/${encodeURIComponent(username)}`;
+  } else {
+    sseUrl = `/api/challenge/${encodeURIComponent(username)}/progress`;
+    redirectUrl = `/challenge/${encodeURIComponent(username)}`;
+  }
 
   const title =
-    mode === 'cedh'
-      ? `Loading ${username} — Build a cEDH Deck`
-      : `Loading ${username} — EDH 32 Deck Challenge`;
+    mode === 'build'
+      ? `Loading ${username} — Build a Commander`
+      : mode === 'cedh'
+        ? `Loading ${username} — Build a cEDH Deck`
+        : `Loading ${username} — Necro Nerds`;
 
   const phaseRows = PHASE_ROWS[mode];
 

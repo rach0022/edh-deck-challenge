@@ -45,8 +45,8 @@ export function Layout({ title, children }: LayoutProps) {
         <div class="bg-glow bg-glow-3" aria-hidden="true" />
         <header>
           <div class="header-inner">
-            <a href="/" class="logo" aria-label="EDH 32 Deck Challenge home">
-              <span aria-hidden="true">🃏</span> EDH 32
+            <a href="/" class="logo" aria-label="Necro Nerds home">
+              <span aria-hidden="true">🃏</span> Necro Nerds
             </a>
             <nav aria-label="Primary">
               <a href="/" class="nav-link">Home</a>
@@ -1725,6 +1725,416 @@ const css = `
     outline-offset: 2px;
   }
 
+  /* ─── Build a Commander results page ─────── */
+
+  .build-commander-art {
+    display: flex;
+    justify-content: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+
+  .build-commander-art img {
+    width: 220px;
+    max-width: 60vw;
+    border-radius: 14px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5),
+                0 0 40px rgba(168, 85, 247, 0.12);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: block;
+  }
+
+  .build-commander-art-link { display: inline-block; line-height: 0; }
+
+  .build-commander-art-link:hover img {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55),
+                0 0 56px rgba(52, 211, 153, 0.18);
+  }
+
+  .build-edhrec-rank {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .build-edhrec-rank strong {
+    color: var(--accent-purple);
+    font-weight: 700;
+  }
+
+  .build-selection {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .build-selection strong { color: var(--accent-green); }
+
+  .build-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    margin: 0 auto 2.5rem;
+    max-width: 720px;
+  }
+
+  .build-summary-stat {
+    flex: 1 1 140px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .build-summary-num {
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .build-summary-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .build-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .build-section {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem 2rem;
+    /* Long page with many sections — skip rendering off-screen ones. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 480px;
+  }
+
+  .build-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    padding-bottom: 0.85rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .build-section-meta {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .build-section-empty {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Owned cards: image gallery grouped by type */
+  .build-owned-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .build-subtype-header {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .build-subtype-count {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--accent-green);
+    padding: 1px 8px;
+    border-radius: 100px;
+    font-size: 0.72rem;
+  }
+
+  .build-owned-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+
+  .build-owned-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .build-owned-link { text-decoration: none; color: inherit; }
+  .build-owned-link:hover { text-decoration: none; color: inherit; }
+
+  .build-owned-img {
+    width: 100%;
+    aspect-ratio: 488 / 680;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: transform 0.15s, box-shadow 0.2s;
+    display: block;
+  }
+
+  .build-owned-card:hover .build-owned-img {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px rgba(52, 211, 153, 0.18);
+  }
+
+  .build-owned-noimg {
+    width: 100%;
+    aspect-ratio: 488 / 680;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: var(--bg-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+
+  .build-owned-caption {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .build-owned-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .build-owned-decks {
+    font-size: 0.75rem;
+    color: var(--accent-green);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* To-buy: collapsible text list (cEDH decklist style) */
+  .build-tobuy {
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 1rem;
+  }
+
+  .build-tobuy summary {
+    cursor: pointer;
+    color: #f0c040;
+    font-size: 0.9rem;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  .build-tobuy summary:hover { color: #ffd870; }
+
+  .build-tobuy-groups {
+    columns: 2;
+    column-gap: 1.75rem;
+    padding-top: 1rem;
+  }
+
+  .build-tobuy-group {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+
+  .build-tobuy-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.3rem;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .build-tobuy-group-type {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .build-tobuy-group-count {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .build-tobuy-list { list-style: none; padding: 0; margin: 0; }
+
+  .build-tobuy-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 2px 0;
+  }
+
+  .build-tobuy-name {
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .build-tobuy-link { color: var(--text-secondary); text-decoration: none; }
+  .build-tobuy-link:hover { color: var(--accent-green); text-decoration: underline; }
+
+  .build-tobuy-price {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #f0c040;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ─── Build a Commander fields + autocomplete ─── */
+
+  .commander-fields {
+    border: 0;
+    padding: 0;
+    margin: 1.25rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .commander-fields[hidden] { display: none; }
+
+  .commander-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    text-align: left;
+  }
+
+  .commander-field > label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding-left: 0.25rem;
+  }
+
+  .field-required { color: var(--accent-green); font-weight: 600; }
+  .field-optional { color: var(--text-muted); font-weight: 400; }
+
+  /* Wrapper is the positioning context for the suggestion dropdown. */
+  .autocomplete {
+    position: relative;
+    width: 100%;
+  }
+
+  .autocomplete input {
+    width: 100%;
+    padding: 0.9rem 1.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    background: rgba(30, 20, 60, 0.9);
+    color: #fff;
+    font-size: 1rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+    color-scheme: dark;
+  }
+
+  .autocomplete input::placeholder { color: rgba(200, 190, 220, 0.5); }
+
+  .autocomplete input:focus {
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2);
+  }
+
+  .autocomplete input:-webkit-autofill,
+  .autocomplete input:-webkit-autofill:hover,
+  .autocomplete input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px rgba(30, 20, 60, 1) inset;
+    -webkit-text-fill-color: #fff;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  /* Suggestion dropdown: floats over following content. */
+  .autocomplete-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.35rem;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    max-height: 280px;
+    overflow-y: auto;
+    background: rgba(24, 18, 45, 0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .autocomplete-list[hidden] { display: none; }
+
+  .autocomplete-item {
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+
+  .autocomplete-item:hover,
+  .autocomplete-item.active {
+    background: rgba(168, 85, 247, 0.18);
+    color: #fff;
+  }
+
   /* ─── Responsive ────────────────────────── */
 
   @media (max-width: 768px) {
@@ -1749,6 +2159,9 @@ const css = `
     .cedh-match-img, .cedh-match-hero .cedh-match-img { width: 100px; }
     .cedh-groups { columns: 1; }
     .cedh-userdecks-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .build-tobuy-groups { columns: 1; }
+    .build-owned-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .build-section { padding: 1.25rem 1rem; }
   }
 
   /* ─── Accessibility: Keyboard Focus ─────── */

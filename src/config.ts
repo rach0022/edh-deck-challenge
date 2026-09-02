@@ -19,6 +19,14 @@ export interface AppConfig {
   cacheTtlSeconds: number;
   /** Moxfield base API URL */
   moxfieldBaseUrl: string;
+  /** Scryfall API base, e.g. https://api.scryfall.com */
+  scryfallBaseUrl: string;
+  /** EDHREC JSON base, e.g. https://json.edhrec.com */
+  edhrecBaseUrl: string;
+  /** Autocomplete/Scryfall request timeout (ms). Default 5000. */
+  scryfallTimeoutMs: number;
+  /** EDHREC fetch timeout (ms). Default 30000. */
+  edhrecTimeoutMs: number;
   /** Puppeteer timeout for Cloudflare challenge (ms) */
   puppeteerTimeoutMs: number;
   /** Whether to run Puppeteer in headless mode */
@@ -59,6 +67,10 @@ export function loadConfig(): AppConfig {
     redisConnectionUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
     cacheTtlSeconds: parseInt(process.env.CACHE_TTL_SECONDS ?? '900', 10),
     moxfieldBaseUrl: process.env.MOXFIELD_BASE_URL ?? 'https://api2.moxfield.com/v2',
+    scryfallBaseUrl: process.env.SCRYFALL_BASE_URL ?? 'https://api.scryfall.com',
+    edhrecBaseUrl: process.env.EDHREC_BASE_URL ?? 'https://json.edhrec.com',
+    scryfallTimeoutMs: parseInt(process.env.SCRYFALL_TIMEOUT_MS ?? '5000', 10),
+    edhrecTimeoutMs: parseInt(process.env.EDHREC_TIMEOUT_MS ?? '30000', 10),
     puppeteerTimeoutMs: parseInt(process.env.PUPPETEER_TIMEOUT_MS ?? '60000', 10),
     puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false',
     nodeEnv: process.env.NODE_ENV ?? 'development',

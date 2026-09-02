@@ -241,7 +241,7 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
     : deck.colorIdentityKey.split('') as Color[];
 
   return (
-    <Layout title={`${deck.name} — EDH Deck Challenge`}>
+    <Layout title={`${deck.name} — Necro Nerds`}>
       <div class="deck-header">
         <h1>{deck.name}</h1>
         <div class="deck-meta">

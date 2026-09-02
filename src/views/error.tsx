@@ -11,7 +11,7 @@ interface ErrorPageProps {
 
 export function ErrorPage({ title, message }: ErrorPageProps) {
   return (
-    <Layout title={`Error — EDH Deck Challenge`}>
+    <Layout title={`Error — Necro Nerds`}>
       <div class="error-page">
         <h1>{title}</h1>
         <p>{message}</p>

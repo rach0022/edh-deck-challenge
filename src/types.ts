@@ -439,3 +439,126 @@ export interface DeckCombosData {
   /** Cards that could be added to enable new combos (within color identity) */
   potentialCards: PotentialComboCard[];
 }
+
+// ─── Build a Commander feature types ────────────────────────────────────────
+
+/** The user's commander choice for a Build-a-Commander request. */
+export interface CommanderSelection {
+  /** Required primary commander (exact card name). */
+  commander: string;
+  /** Optional partner commander. */
+  partner: string | null;
+  /** Optional companion. */
+  companion: string | null;
+}
+
+/** A single recommended card from EDHREC (raw, pre-ownership). */
+export interface EdhrecRecommendation {
+  name: string;
+  /** The EDHREC panel/section this card came from (e.g. "High Synergy Cards"). */
+  category: string;
+  inclusion: number | null;
+  synergy: number | null;
+  scryfallId: string | null;
+  setCode: string | null;
+  collectorNumber: string | null;
+}
+
+/** A recommended card annotated with ownership, source decks, and pricing. */
+export interface BuildCommanderCard {
+  name: string;
+  /** EDHREC category/panel this card came from. */
+  category: string;
+  /** True when the card is in the user's owned set. */
+  owned: boolean;
+  /** Deck names containing this card (Source_Decks); empty for to-buy cards. */
+  sourceDecks: string[];
+  /** Card art (art_crop) for compact display; null if unknown. */
+  art: string | null;
+  /** Full card image (normal) for the owned-card gallery; null if unknown. */
+  imageUrl: string | null;
+  /**
+   * Canonical card type used to sub-group within a section
+   * (Creature/Artifact/Enchantment/Instant/Sorcery/Land/Planeswalker/Battle/Other).
+   */
+  cardType: string;
+  /** Scryfall id for linking, or null. */
+  scryfallId: string | null;
+  /** Known USD price for the printing, or null. */
+  usd: number | null;
+  /** CAD-converted price, or null when usd is null. */
+  cad: number | null;
+}
+
+/** A card-type sub-group within a section (e.g. "Creature" cards). */
+export interface BuildTypeGroup {
+  /** Canonical card type (matches CARD_TYPE_ORDER). */
+  type: string;
+  cards: BuildCommanderCard[];
+}
+
+/**
+ * One EDHREC section (panel) of recommendations, split into the cards the user
+ * already owns and the cards they'd need to buy, each sub-grouped by card type.
+ */
+export interface BuildSection {
+  /** EDHREC panel header, e.g. "High Synergy Cards", "Top Cards", "Creatures". */
+  name: string;
+  /** Owned cards in this section, grouped by card type (shown as images). */
+  ownedGroups: BuildTypeGroup[];
+  /** To-buy cards in this section, grouped by card type (shown as a card list). */
+  toBuyGroups: BuildTypeGroup[];
+  /** Count of owned cards in this section. */
+  ownedCount: number;
+  /** Count of to-buy cards in this section. */
+  toBuyCount: number;
+  /** Sum of CAD prices of priced to-buy cards in this section. */
+  toBuyTotalCad: number;
+}
+
+/** A selected commander with its full card image, for the results header. */
+export interface CommanderImage {
+  name: string;
+  /** Full card image (normal); null when Scryfall couldn't resolve it. */
+  imageUrl: string | null;
+  /** Scryfall id for linking, or null. */
+  scryfallId: string | null;
+}
+
+/** Full response for the Build-a-Commander results page. */
+export interface BuildCommanderResponse {
+  username: string;
+  selection: CommanderSelection;
+  /**
+   * Recommendations grouped by EDHREC section (panel), each split into owned /
+   * to-buy and sub-grouped by card type. This is what the results page renders.
+   */
+  sections: BuildSection[];
+  /**
+   * The selected commander(s) with full card images for the page header — the
+   * primary commander first, then the partner when present. Entries whose card
+   * image couldn't be resolved from Scryfall are omitted.
+   */
+  commanderImages: CommanderImage[];
+  /** Flat list of owned recommendations (across all sections, de-duplicated). */
+  ownedCards: BuildCommanderCard[];
+  /** Flat list of to-buy recommendations (across all sections, de-duplicated). */
+  toBuyCards: BuildCommanderCard[];
+  ownedCount: number;
+  toBuyCount: number;
+  /** Sum of CAD prices of priced to-buy cards. */
+  buyListTotalCad: number;
+  /** Number of the user's decks used to build the owned set. */
+  deckCount: number;
+  /** FX rate info used for CAD conversion. */
+  fx: FxInfo;
+  /** True when the user had no commander decks (all cards to-buy). */
+  noDecks: boolean;
+  /**
+   * The commander's overall EDHREC popularity rank (1 = most-played commander),
+   * or null when EDHREC doesn't provide it.
+   */
+  edhrecRank: number | null;
+  /** How many EDHREC decks run this commander, or null. */
+  edhrecNumDecks: number | null;
+}

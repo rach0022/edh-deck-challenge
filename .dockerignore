@@ -1,12 +1,29 @@
+# Dependencies & build artifacts (reinstalled/rebuilt inside the image)
 node_modules
-backend/node_modules
-backend/dist
 dist
 build
+utils/build
+
+# The image builds only the web app (src/) via the root package.json.
+# The relocated CLI tool and the test suite aren't needed at runtime.
+utils
+tests
+
+# Version control, CI, and specs
 .git
+.gitignore
+.github
+.kiro
+archive
+
+# Local env / secrets (never bake into the image; use runtime env vars)
 .env
-backend/.env
-backend/.secrets
-backend/.secrets.env
+.env.*
+!.env.example
+*.secrets.env
+
+# Logs, OS cruft, and editor files
 *.log
 .DS_Store
+.nvmrc
+README.md

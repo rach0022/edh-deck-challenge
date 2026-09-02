@@ -23,11 +23,15 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { createCacheService } from './services/cache.js';
+import { createBrowserService } from './services/browser.js';
 import { createMoxfieldService } from './services/moxfield.js';
 import { createSpellbookService } from './services/spellbook.js';
 import { createChallengeService } from './services/challenge.js';
 import { createCedhService } from './services/cedh.js';
 import { createFxService } from './services/fx.js';
+import { createScryfallService } from './services/scryfall.js';
+import { createEdhrecService } from './services/edhrec.js';
+import { createBuildCommanderService } from './services/build-commander.js';
 import { createChallengeRoutes } from './routes/challenge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createPageRoutes } from './routes/pages.js';
@@ -37,11 +41,22 @@ const config = loadConfig();
 // ─── Initialize services ────────────────────────────────────────────────────
 
 const cache = createCacheService(config);
-const moxfield = createMoxfieldService(config);
+const browser = createBrowserService(config);
+const moxfield = createMoxfieldService(config, browser);
 const spellbook = createSpellbookService();
 const challengeService = createChallengeService(config, cache, moxfield, spellbook);
 const fxService = createFxService(cache);
 const cedhService = createCedhService(config, cache, moxfield, fxService);
+const scryfallService = createScryfallService(config, cache);
+const edhrecService = createEdhrecService(config, cache, browser);
+const buildCommanderService = createBuildCommanderService(
+  config,
+  cache,
+  moxfield,
+  edhrecService,
+  fxService,
+  scryfallService,
+);
 
 // ─── Create Hono app ────────────────────────────────────────────────────────
 
@@ -76,7 +91,10 @@ app.get('/favicon.ico', (c) => {
   return c.redirect('/favicon.svg', 301);
 });
 
-app.route('/', createPageRoutes(challengeService, cedhService));
+app.route(
+  '/',
+  createPageRoutes(challengeService, cedhService, scryfallService, buildCommanderService),
+);
 
 // 404 fallback
 app.notFound((c) => {
@@ -99,7 +117,7 @@ const cacheDriverLabel = {
 } as const;
 
 console.log(`
-🃏 EDH 32 Deck Challenge API
+🃏 Necro Nerds API
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Port:        ${config.port}
   Environment: ${config.nodeEnv}
@@ -117,7 +135,7 @@ serve({
 
 async function shutdown(): Promise<void> {
   console.log('\n🛑 Shutting down...');
-  await moxfield.shutdown();
+  await browser.shutdown();
   process.exit(0);
 }
 

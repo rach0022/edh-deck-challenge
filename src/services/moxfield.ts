@@ -1,14 +1,15 @@
 /**
- * Moxfield scraping service using Puppeteer.
- * Manages a shared browser instance for Cloudflare bypass.
+ * Moxfield scraping service.
  *
- * The browser stays alive between requests to avoid re-solving
- * Cloudflare challenges on every API call. It is recycled if
- * disconnected or after a max lifetime.
+ * Fetches a user's commander decks and deck details from Moxfield's API
+ * through a shared Puppeteer browser (see `services/browser.ts`) that
+ * handles the Cloudflare challenge. The browser lifecycle is owned by the
+ * injected `BrowserService`; this service only translates HTTP responses
+ * and browser failures into Moxfield-specific results and errors.
  */
 
-import puppeteer, { type Browser, type Page } from 'puppeteer';
 import type { AppConfig } from '../config.js';
+import type { BrowserService } from './browser.js';
 import type {
   MoxfieldDeckSummary,
   MoxfieldDeckDetail,
@@ -76,81 +77,16 @@ export function parseMoxfieldDeckId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-export function createMoxfieldService(config: AppConfig): MoxfieldService {
-  let browser: Browser | null = null;
-  let page: Page | null = null;
-  let ready = false;
-
-  async function initialize(): Promise<void> {
-    if (ready && browser?.connected) return;
-
-    // Clean up any existing browser
-    if (browser) {
-      try { await browser.close(); } catch { /* ignore */ }
-    }
-
-    console.log('🌐 Launching browser for Moxfield access...');
-
-    browser = await puppeteer.launch({
-      headless: config.puppeteerHeadless,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-      ],
-    });
-
-    page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
-    await page.setViewport({ width: 1280, height: 720 });
-
-    // Navigate to Moxfield to solve Cloudflare challenge
-    console.log('🔐 Solving Cloudflare challenge...');
-    await page.goto('https://moxfield.com', {
-      waitUntil: 'networkidle2',
-      timeout: config.puppeteerTimeoutMs,
-    });
-
-    // Wait for Cloudflare to clear
-    await page.waitForFunction(
-      () => !document.title.includes('Just a moment'),
-      { timeout: config.puppeteerTimeoutMs }
-    );
-
-    ready = true;
-    console.log('✅ Browser ready — Cloudflare challenge solved.');
-  }
-
-  async function ensureReady(): Promise<void> {
-    if (!ready || !browser?.connected || !page) {
-      await initialize();
-    }
-  }
-
+export function createMoxfieldService(
+  config: AppConfig,
+  browser: BrowserService,
+): MoxfieldService {
   async function browserFetch(url: string): Promise<{ status: number; body: unknown }> {
-    await ensureReady();
     try {
-      const result = await page!.evaluate(async (fetchUrl: string) => {
-        const response = await fetch(fetchUrl, {
-          headers: { Accept: 'application/json' },
-        });
-        const text = await response.text();
-        let body: unknown;
-        try {
-          body = JSON.parse(text);
-        } catch {
-          body = text;
-        }
-        return { status: response.status, body };
-      }, url);
-      return result;
+      return await browser.browserFetch(url);
     } catch (error) {
-      // Browser context may be stale — mark as not ready for retry
-      ready = false;
+      // The shared browser could not complete the fetch (stale context,
+      // navigation timeout, or unreachable) — surface it as a Moxfield timeout.
       throw new MoxfieldTimeoutError();
     }
   }
@@ -225,21 +161,12 @@ export function createMoxfieldService(config: AppConfig): MoxfieldService {
     return body as MoxfieldDeckDetail;
   }
 
-  async function shutdown(): Promise<void> {
-    ready = false;
-    if (browser) {
-      try { await browser.close(); } catch { /* ignore */ }
-      browser = null;
-      page = null;
-    }
-    console.log('🛑 Browser shut down.');
-  }
-
   return {
     fetchUserDecks,
     fetchDeckDetail,
-    isReady: () => ready,
-    initialize,
-    shutdown,
+    // Lifecycle delegates to the shared browser service.
+    isReady: () => browser.isReady(),
+    initialize: () => browser.initialize(),
+    shutdown: () => browser.shutdown(),
   };
 }

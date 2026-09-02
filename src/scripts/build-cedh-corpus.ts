@@ -30,6 +30,7 @@ import {
   MoxfieldAPIError,
   MoxfieldTimeoutError,
 } from '../services/moxfield.js';
+import { createBrowserService } from '../services/browser.js';
 import { extractDeckCards } from '../services/cedh.js';
 import type { CedhCorpus, CedhReferenceDeck } from '../types.js';
 
@@ -163,7 +164,8 @@ async function main(): Promise<void> {
   }
 
   const config = loadConfig();
-  const moxfield = createMoxfieldService(config);
+  const browser = createBrowserService(config);
+  const moxfield = createMoxfieldService(config, browser);
 
   console.log('🌐 Initializing Moxfield browser (solving Cloudflare)...');
   await moxfield.initialize();
