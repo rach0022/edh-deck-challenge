@@ -6,21 +6,15 @@
 
 import type { Color, ColorIdentity } from '../types.js';
 
-/** Canonical WUBRG color ordering */
 const WUBRG_ORDER: readonly Color[] = ['W', 'U', 'B', 'R', 'G'];
 
-/**
- * Minimal interface for a commander's color identity.
- * Compatible with the full ExtractedCommander interface from commander-extractor.
- */
 export interface CommanderColorSource {
   colorIdentity: Color[];
 }
 
 /**
  * Resolves the combined color identity from one or more commanders.
- * Computes the union of all commanders' color identities,
- * deduplicates, and sorts in WUBRG order.
+ * Computes the union, deduplicates, and sorts in WUBRG order.
  */
 export function resolveColorIdentity(commanders: CommanderColorSource[]): ColorIdentity {
   const colorSet = new Set<Color>();
@@ -31,18 +25,12 @@ export function resolveColorIdentity(commanders: CommanderColorSource[]): ColorI
     }
   }
 
-  // Sort in WUBRG order by filtering the canonical order
   return WUBRG_ORDER.filter((c) => colorSet.has(c));
 }
 
 /**
  * Converts a color identity array to a string key.
- * An empty identity (colorless) returns "C".
- * Otherwise returns the concatenation of colors in WUBRG order.
- *
- * @example
- * colorIdentityToKey(['W', 'U']) // "WU"
- * colorIdentityToKey([])         // "C"
+ * Empty identity (colorless) returns "C".
  */
 export function colorIdentityToKey(identity: ColorIdentity): string {
   if (identity.length === 0) {

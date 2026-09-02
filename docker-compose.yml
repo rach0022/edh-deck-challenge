@@ -5,7 +5,7 @@
 services:
   app:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     ports:
       # Host port is configurable: APP_PORT=8080 docker compose up -d
