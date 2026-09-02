@@ -1,0 +1,29 @@
+name: NPM Security Audit
+
+# Runs a security check on all npm packages for any pull request.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fail the PR if any dependency has a high or critical severity advisory.
+      - name: Run npm audit (fail on high or above)
+        run: npm audit --audit-level=high
