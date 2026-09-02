@@ -1,6 +1,10 @@
-# 🃏 EDH 32 Deck Challenge — Web App
+# 🃏 Necro Nerds — EDH Deck Tools
 
-A full-stack Hono application that serves both a server-side rendered web UI and a JSON REST API for the EDH 32 Deck Challenge. Enter a Moxfield username and see which of the 32 color identity slots have been filled with Commander decks — plus discover infinite combos in each deck powered by Commander Spellbook, and match your card pool against a corpus of competitive (cEDH) decks.
+A full-stack [Hono](https://hono.dev) application that serves both a server-side rendered web UI and a JSON REST API for a set of Magic: The Gathering Commander (EDH) deck tools. Enter a Moxfield username (or pick a commander) and get:
+
+- **📊 32 Deck Challenge** — see which of the 32 color-identity slots you've filled with Commander decks, plus infinite combos in each deck via Commander Spellbook.
+- **⚔️ Build a cEDH Deck** — match your card pool against a corpus of competitive (cEDH) decks and find the ones you're closest to being able to build, with a CAD-priced buy list.
+- **🛠️ Build a Commander** — pick any commander (plus optional partner and companion) and see which of EDHREC's recommended cards you already own versus what you'd need to buy.
 
 No auth. No database. No sign-up. Just enter a username and go.
 
@@ -12,18 +16,136 @@ No auth. No database. No sign-up. Just enter a username and go.
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Web Framework** | [Hono](https://hono.dev) v4.7 | HTTP routing, middleware, JSX SSR |
+| **Web Framework** | [Hono](https://hono.dev) v4 | HTTP routing, middleware, JSX SSR |
 | **Runtime** | Node.js 22+ | ES modules, native fetch |
-| **Rendering** | Hono JSX | Server-side rendered HTML (no React, no client JS) |
-| **Browser Automation** | [Puppeteer](https://pptr.dev) v25 | Headless Chrome for Cloudflare bypass |
+| **Rendering** | Hono JSX | Server-side rendered HTML (no React, no client JS bundle) |
+| **Browser Automation** | [Puppeteer](https://pptr.dev) v25 | Headless Chrome for Cloudflare bypass (Moxfield + EDHREC) |
 | **Combo Detection** | [Commander Spellbook API](https://commanderspellbook.com) | Find EDH combos in decks |
+| **Card Data** | [Scryfall API](https://scryfall.com/docs/api) | Commander/companion autocomplete + card pricing |
+| **Recommendations** | [EDHREC](https://edhrec.com) | Recommended cards for a commander |
 | **Cache (Production)** | [Upstash Redis](https://upstash.com) | HTTP-based serverless Redis |
 | **Cache (Local)** | [ioredis](https://github.com/redis/ioredis) v5 | Standard Redis via TCP (Docker) |
 | **Cache (Fallback)** | In-memory Map | Zero-config development fallback |
 | **Language** | TypeScript 5.8 | Strict mode, ES2022 target |
 | **Bundler** | tsc | Direct TypeScript compilation |
 | **Dev Server** | [tsx](https://github.com/privatenumber/tsx) | Hot-reload during development |
-| **Deployment** | Docker | Multi-stage Dockerfile for local containerized runs |
+| **Deployment** | Docker | Multi-stage Dockerfile for containerized runs |
+
+---
+
+## Feature Architecture
+
+Necro Nerds is built from three features that share a common set of services. Each service is either **I/O + orchestration** (`src/services/`) or **pure business logic** (`src/domain/`). The diagrams below show, per feature, which services back it and how they connect.
+
+Two services are shared connective tissue across every feature:
+
+- **`cache`** — multi-driver cache (Upstash / ioredis / in-memory). Every orchestrating service reads/writes through it.
+- **`moxfield`** — Puppeteer-backed Moxfield scraper. It sits behind the shared **`browser`** service (a single headless Chrome instance).
+
+### 📊 32 Deck Challenge
+
+Fetches a user's Commander decks, maps each to one of the 32 color-identity slots, and decorates each deck with infinite combos from Commander Spellbook.
+
+```mermaid
+flowchart LR
+  Route["routes/pages + routes/challenge"] --> CH["challengeService"]
+
+  CH --> Cache["cache"]
+  CH --> MOX["moxfield"]
+  CH --> SB["spellbook"]
+  MOX --> BR["browser (headless Chrome)"]
+
+  subgraph Domain["Domain (pure logic)"]
+    CI["color-identity / color-combinations"]
+    CE["commander-extractor"]
+    DO["deck-organizer"]
+  end
+
+  CH --> CI
+  CH --> CE
+  CH --> DO
+
+  MOX -.-> Moxfield[("Moxfield")]
+  SB -.-> Spellbook[("Commander Spellbook")]
+```
+
+**Services:** `challengeService` ← `cache`, `moxfield` (← `browser`), `spellbook`
+**Domain:** `color-combinations`, `color-identity`, `commander-extractor`, `deck-organizer`
+
+### ⚔️ Build a cEDH Deck
+
+Takes the union of every card across a user's Commander decks as their "collection," then scores it against a bundled corpus of competitive decks to find the closest matches, each with a CAD-priced missing-cards buy list.
+
+```mermaid
+flowchart LR
+  Route["routes/pages"] --> CEDH["cedhService"]
+
+  CEDH --> Cache["cache"]
+  CEDH --> MOX["moxfield"]
+  CEDH --> FX["fx (USD→CAD)"]
+  MOX --> BR["browser (headless Chrome)"]
+
+  subgraph Domain["Domain (pure logic)"]
+    DS["deck-similarity"]
+    CT["card-type"]
+  end
+
+  subgraph Data["Bundled data"]
+    Corpus["cedh-corpus.json"]
+  end
+
+  CEDH --> DS
+  CEDH --> CT
+  CEDH --> Corpus
+
+  MOX -.-> Moxfield[("Moxfield")]
+  FX -.-> Rate[("Exchange-rate API")]
+```
+
+**Services:** `cedhService` ← `cache`, `moxfield` (← `browser`), `fx`
+**Domain:** `deck-similarity`, `card-type`
+**Data:** `cedh-corpus.json` (bundled cEDH reference corpus)
+
+### 🛠️ Build a Commander
+
+Given a commander selection (commander + optional partner/companion), pulls EDHREC's recommendations, cross-references them against the user's collection, splits owned vs. missing, and prices the buy list in CAD.
+
+```mermaid
+flowchart LR
+  Route["routes/pages"] --> BC["buildCommanderService"]
+
+  BC --> Cache["cache"]
+  BC --> MOX["moxfield"]
+  BC --> EDH["edhrec"]
+  BC --> FX["fx (USD→CAD)"]
+  BC --> SF["scryfall"]
+  MOX --> BR["browser (headless Chrome)"]
+  EDH --> BR
+
+  subgraph Domain["Domain (pure logic)"]
+    Slug["edhrec-slug / edhrec-parser"]
+    SQ["scryfall-query"]
+    SK["selection-key"]
+    Split["build-commander-split / -pricing / -sections"]
+    Col["collection"]
+  end
+
+  BC --> Slug
+  BC --> SQ
+  BC --> SK
+  BC --> Split
+  BC --> Col
+
+  MOX -.-> Moxfield[("Moxfield")]
+  EDH -.-> Edhrec[("EDHREC")]
+  SF -.-> Scryfall[("Scryfall")]
+  FX -.-> Rate[("Exchange-rate API")]
+```
+
+**Services:** `buildCommanderService` ← `cache`, `moxfield` (← `browser`), `edhrec` (← `browser`), `fx`, `scryfall`
+**Domain:** `edhrec-slug`, `edhrec-parser`, `scryfall-query`, `selection-key`, `build-commander-split`, `build-commander-pricing`, `build-commander-sections`, `collection`
+
+> **Autocomplete:** The commander/companion type-ahead routes (`/api/scryfall/commanders`, `/api/scryfall/companions`) use `scryfallService` directly — they don't go through `buildCommanderService`.
 
 ---
 
@@ -32,7 +154,7 @@ No auth. No database. No sign-up. Just enter a username and go.
 ```
 / (repo root)
 ├── src/                            # THE WEB APPLICATION (Hono SSR + API)
-│   ├── index.ts                    # Server entry point, route mounting
+│   ├── index.ts                    # Server entry point, service wiring, route mounting
 │   ├── config.ts                   # Environment variable loading + cache driver detection
 │   ├── types.ts                    # All TypeScript interfaces
 │   │
@@ -42,28 +164,43 @@ No auth. No database. No sign-up. Just enter a username and go.
 │   │   ├── commander-extractor.ts  # Extract commanders from deck data
 │   │   ├── deck-organizer.ts       # Map decks to 32 slots
 │   │   ├── deck-similarity.ts      # cEDH matching (normalized card-name sets)
-│   │   └── card-type.ts            # Card-type classification
+│   │   ├── card-type.ts            # Card-type classification
+│   │   ├── collection.ts           # Build a user's owned-card collection
+│   │   ├── selection-key.ts        # Stable cache key for a commander selection
+│   │   ├── edhrec-slug.ts          # Commander name → EDHREC slug
+│   │   ├── edhrec-parser.ts        # Parse EDHREC recommendation data
+│   │   ├── scryfall-query.ts       # Build Scryfall search/pricing queries
+│   │   ├── build-dispatch.ts       # Validate + build Build-a-Commander URLs
+│   │   ├── build-commander-split.ts    # Owned vs. missing partition
+│   │   ├── build-commander-pricing.ts  # USD→CAD pricing of buy lists
+│   │   └── build-commander-sections.ts # Group results into display sections
 │   │
 │   ├── services/                   # I/O and orchestration
 │   │   ├── cache.ts                # Multi-driver cache (Upstash / ioredis / memory)
-│   │   ├── challenge.ts            # Main business logic orchestrator
-│   │   ├── cedh.ts                 # cEDH matching orchestrator
+│   │   ├── browser.ts              # Shared headless Chrome (Puppeteer) instance
+│   │   ├── challenge.ts            # 32 Deck Challenge orchestrator
+│   │   ├── cedh.ts                 # Build a cEDH Deck orchestrator
+│   │   ├── build-commander.ts      # Build a Commander orchestrator
 │   │   ├── fx.ts                   # USD→CAD exchange-rate service
 │   │   ├── moxfield.ts             # Puppeteer-based Moxfield scraper
+│   │   ├── edhrec.ts               # Puppeteer-based EDHREC client
+│   │   ├── scryfall.ts             # Scryfall autocomplete + pricing client
 │   │   └── spellbook.ts            # Commander Spellbook combo detection API client
 │   │
 │   ├── routes/                     # HTTP route handlers
 │   │   ├── challenge.ts            # JSON API endpoints (/api/*)
 │   │   ├── health.ts               # Health check endpoint
-│   │   └── pages.tsx               # SSR page routes
+│   │   └── pages.tsx               # SSR page routes (all three features)
 │   │
 │   ├── views/                      # Hono JSX components (server-rendered)
 │   │   ├── layout.tsx              # Base HTML shell + all CSS
-│   │   ├── home.tsx                # Landing page with search form
+│   │   ├── home.tsx                # Landing page with mode toggle + autocomplete
 │   │   ├── challenge.tsx           # 32-slot progress grid (with combo badges)
 │   │   ├── cedh-match.tsx          # cEDH match results
+│   │   ├── build.tsx               # Build-a-Commander results
 │   │   ├── deck-detail.tsx         # Single deck with card list + combos section
-│   │   ├── loading.tsx             # SSE loading page
+│   │   ├── board-badge.tsx         # Board/section badge component
+│   │   ├── loading.tsx             # SSE loading page (per-mode phases)
 │   │   └── error.tsx               # Error page component
 │   │
 │   ├── middleware/
@@ -173,17 +310,21 @@ npm run dev
 
 ### SSR Pages (HTML)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Landing page with username search form (mode toggle) |
-| GET | `/search?username=X&mode=challenge\|cedh` | Dispatches to the correct loading page based on mode |
-| GET | `/challenge/:username` | 32-slot progress grid with commander art |
-| GET | `/cedh/:username` | "Build a cEDH Deck" — top 5 closest competitive decks + buy lists |
-| GET | `/cedh/loading/:username` | Loading page for the cEDH match flow (SSE progress) |
-| GET | `/deck/:deckId` | Deck detail with cards grouped by type |
-| POST | `/refresh/:username` | Force refresh, redirects to challenge page |
-| POST | `/cedh/refresh/:username` | Force refresh of cEDH matches, redirects back |
-| GET | `/favicon.svg` | Skull favicon |
+| Method | Path | Feature | Description |
+|--------|------|---------|-------------|
+| GET | `/` | — | Landing page with mode toggle (challenge / cedh / build) |
+| GET | `/search?username=X&mode=challenge\|cedh\|build` | — | Dispatches to the correct loading page based on mode |
+| GET | `/challenge/:username` | 32 Deck Challenge | 32-slot progress grid with commander art |
+| GET | `/loading/:username` | 32 Deck Challenge | Loading page (SSE progress) |
+| GET | `/cedh/:username` | Build a cEDH Deck | Top 5 closest competitive decks + buy lists |
+| GET | `/cedh/loading/:username` | Build a cEDH Deck | Loading page (SSE progress) |
+| GET | `/build/:username?commander=&partner=&companion=` | Build a Commander | Owned vs. missing recommendations + CAD buy list |
+| GET | `/build/loading/:username?commander=…` | Build a Commander | Loading page (SSE progress) |
+| GET | `/deck/:deckId` | — | Deck detail with cards grouped by type |
+| POST | `/refresh/:username` | 32 Deck Challenge | Force refresh, redirects to challenge page |
+| POST | `/cedh/refresh/:username` | Build a cEDH Deck | Force refresh of cEDH matches, redirects back |
+| POST | `/build/refresh/:username?commander=…` | Build a Commander | Force refresh of build result, redirects back |
+| GET | `/favicon.svg` | — | Skull favicon |
 
 ### JSON API
 
@@ -194,14 +335,18 @@ npm run dev
 | GET | `/api/decks/:username` | Flat list of all commander decks |
 | GET | `/api/deck/:deckId` | Single deck detail with card groupings |
 | POST | `/api/refresh/:username` | Force cache refresh, returns fresh data |
+| GET | `/api/challenge/:username/progress` | SSE progress stream (32 Deck Challenge) |
+| GET | `/api/cedh/:username/progress` | SSE progress stream (Build a cEDH Deck) |
+| GET | `/api/build/:username/progress?commander=…` | SSE progress stream (Build a Commander) |
+| GET | `/api/scryfall/commanders?q=…` | Commander type-ahead suggestions (Scryfall) |
+| GET | `/api/scryfall/companions?q=…` | Companion type-ahead suggestions (Scryfall) |
 
 ---
 
 ## Build a cEDH Deck
 
-In addition to the 32 Deck Challenge, the app can match a user's card pool
-against a corpus of known competitive (cEDH) decks and show the ones they're
-closest to being able to build.
+The app can match a user's card pool against a corpus of known competitive
+(cEDH) decks and show the ones they're closest to being able to build.
 
 ### How it works
 
@@ -215,7 +360,8 @@ closest to being able to build.
    "collection."
 3. **Matching** — Each reference deck is scored by *owned fraction*: of the
    cards in that deck, how many does the user already own? Decks are ranked
-   best-first and the top 5 are shown, each with a **missing-cards buy list**.
+   best-first and the top 5 are shown, each with a **missing-cards buy list**
+   priced in CAD.
 
 The similarity logic lives in `src/domain/deck-similarity.ts` (pure functions,
 normalized card-name matching). At runtime the corpus can also be overridden via
@@ -278,13 +424,13 @@ When `CACHE_DRIVER` is not explicitly set:
 |----------|-----------|
 | No auth or database | Users just type a username — zero friction |
 | Hono JSX for SSR | No client-side JS bundle, fast page loads, single deploy unit |
-| Puppeteer for Moxfield | Moxfield API is behind Cloudflare WAF, no official API key available |
+| Puppeteer for Moxfield + EDHREC | Both are behind Cloudflare WAF, no official API key available |
 | Commander Spellbook for combos | Free public REST API, no auth required, comprehensive combo database |
 | Non-blocking combo detection | Spellbook failures gracefully degrade (empty combos) — never breaks page |
 | Lazy browser init | Don't block startup; health checks stay fast on hosting platforms |
 | Shared browser instance | One Chromium process for all requests; auto-reconnects if stale |
 | Multi-cache driver | Works anywhere: free hosting (Upstash), local dev (Docker Redis), or zero-config (memory) |
-| Domain logic is pure | `domain/` modules have no I/O — easily testable |
+| Domain logic is pure | `domain/` modules have no I/O — easily testable, backed by property-based tests |
 
 ---
 
