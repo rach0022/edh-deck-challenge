@@ -1,6 +1,6 @@
-# ─── EDH Deck Challenge API ──────────────────────────────────────────────────
-# Root-level Dockerfile for local Docker development.
-# Build context is the repo root; all paths reference backend/.
+# ─── EDH Deck Challenge ──────────────────────────────────────────────────────
+# Root-level Dockerfile. Build context is the repository root; the web app lives
+# in ./src and is built with the root package.json (see docker-compose.yml).
 
 FROM node:26-slim AS base
 
@@ -32,17 +32,18 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
-# ─── Dependencies ────────────────────────────────────────────────────────────
+# ─── Dependencies (production only) ──────────────────────────────────────────
 FROM base AS deps
-COPY backend/package.json backend/package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 
 # ─── Build ───────────────────────────────────────────────────────────────────
 FROM base AS build
-COPY backend/package.json backend/package-lock.json* ./
+COPY package.json package-lock.json* ./
 RUN npm ci
-COPY backend/tsconfig.json ./tsconfig.json
-COPY backend/src ./src
+COPY tsconfig.json ./tsconfig.json
+COPY src ./src
+# Compiles TS and copies src/public + src/data into dist (see package.json build).
 RUN npm run build
 
 # ─── Production ──────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY backend/package.json ./
+COPY package.json ./
 
 ENV HOME=/tmp
 

@@ -1,18 +1,8 @@
 /**
  * Defines the 32 color combination slots for the EDH Deck Challenge.
- * Each slot represents one of the possible color identities in Magic: The Gathering.
  */
 
-import type { Color } from '../types.js';
-
-export type SlotCategory = 'colorless' | 'mono' | 'two-color' | 'three-color' | 'four-color' | 'five-color';
-
-export interface ColorCombinationDef {
-  key: string;
-  name: string;
-  colors: Color[];
-  category: SlotCategory;
-}
+import type { Color, SlotCategory, ColorCombinationDef } from '../types.js';
 
 export const COLOR_COMBINATIONS: readonly ColorCombinationDef[] = [
   // Colorless (1)

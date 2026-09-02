@@ -1,127 +1,143 @@
-#!/usr/bin/env node
 /**
- * EDH 32 Deck Challenge Checker - CLI Entry Point
+ * EDH 32 Deck Challenge API + SSR Pages
  *
- * Orchestrates the full pipeline:
- * validate → fetch decks → fetch details → extract commanders →
- * resolve identities → organize → render ASCII → render HTML
+ * Hono-based server that serves both:
+ * - JSON API endpoints under /api/*
+ * - Server-side rendered HTML pages at /
+ *
+ * Uses Puppeteer for Moxfield scraping and Redis for caching.
+ *
+ * Architecture:
+ *   Browser → Hono → Cache (Redis) → Moxfield (via Puppeteer)
+ *
+ * The browser is lazily initialized on first request to avoid
+ * blocking startup (important for health checks on Render).
  */
 
-import { mkdirSync } from 'node:fs';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
+import { serve } from '@hono/node-server';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { validateUsername } from './validator.js';
-import {
-  MoxfieldUserNotFoundError,
-  MoxfieldAPIError,
-  MoxfieldTimeoutError,
-} from './api/moxfield-client.js';
-import { createBrowserClient } from './api/browser-client.js';
-import { extractCommanders } from './domain/commander-extractor.js';
-import { organizeDecks } from './domain/deck-organizer.js';
-import { renderASCII } from './renderers/ascii-renderer.js';
-import { renderHTML } from './renderers/html-renderer.js';
+import { fileURLToPath } from 'node:url';
+import { loadConfig } from './config.js';
+import { createCacheService } from './services/cache.js';
+import { createBrowserService } from './services/browser.js';
+import { createMoxfieldService } from './services/moxfield.js';
+import { createSpellbookService } from './services/spellbook.js';
+import { createChallengeService } from './services/challenge.js';
+import { createCedhService } from './services/cedh.js';
+import { createFxService } from './services/fx.js';
+import { createScryfallService } from './services/scryfall.js';
+import { createEdhrecService } from './services/edhrec.js';
+import { createBuildCommanderService } from './services/build-commander.js';
+import { createChallengeRoutes } from './routes/challenge.js';
+import { createHealthRoutes } from './routes/health.js';
+import { createPageRoutes } from './routes/pages.js';
 
-async function main(): Promise<void> {
-  // 1. Parse username from CLI arguments
-  const usernameArg = process.argv[2];
+const config = loadConfig();
 
-  // 2. Validate username
-  const validation = validateUsername(usernameArg);
-  if (!validation.valid) {
-    console.error(validation.error);
-    process.exit(1);
+// ─── Initialize services ────────────────────────────────────────────────────
+
+const cache = createCacheService(config);
+const browser = createBrowserService(config);
+const moxfield = createMoxfieldService(config, browser);
+const spellbook = createSpellbookService();
+const challengeService = createChallengeService(config, cache, moxfield, spellbook);
+const fxService = createFxService(cache);
+const cedhService = createCedhService(config, cache, moxfield, fxService);
+const scryfallService = createScryfallService(config, cache);
+const edhrecService = createEdhrecService(config, cache, browser);
+const buildCommanderService = createBuildCommanderService(
+  config,
+  cache,
+  moxfield,
+  edhrecService,
+  fxService,
+  scryfallService,
+);
+
+// ─── Create Hono app ────────────────────────────────────────────────────────
+
+const app = new Hono();
+
+// Global middleware
+app.use('*', logger());
+app.use('*', cors({
+  origin: '*', // Allow all origins (no auth, public API)
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type'],
+  maxAge: 86400,
+}));
+
+// Mount routes — API first, then static assets, then SSR pages
+app.route('/api', createChallengeRoutes(challengeService));
+app.route('/api', createHealthRoutes(cache, moxfield));
+
+// Serve favicon
+const __dirname = join(fileURLToPath(import.meta.url), '..');
+const faviconSvg = readFileSync(join(__dirname, 'public', 'favicon.svg'), 'utf-8');
+
+app.get('/favicon.svg', (c) => {
+  return c.body(faviconSvg, 200, {
+    'Content-Type': 'image/svg+xml',
+    'Cache-Control': 'public, max-age=86400',
+  });
+});
+
+app.get('/favicon.ico', (c) => {
+  // Redirect .ico requests to the SVG
+  return c.redirect('/favicon.svg', 301);
+});
+
+app.route(
+  '/',
+  createPageRoutes(challengeService, cedhService, scryfallService, buildCommanderService),
+);
+
+// 404 fallback
+app.notFound((c) => {
+  // Return JSON for /api/* requests, HTML for everything else
+  if (c.req.path.startsWith('/api')) {
+    return c.json({ success: false, error: 'Not found' }, 404);
   }
+  return c.html(
+    '<html><body style="background:#1a1a2e;color:#e0e0e0;font-family:sans-serif;text-align:center;padding:4rem;"><h1 style="color:#ff6060;">Page Not Found</h1><p><a href="/" style="color:#f0c040;">← Back to home</a></p></body></html>',
+    404
+  );
+});
 
-  const { username } = validation;
+// ─── Start server ───────────────────────────────────────────────────────────
 
-  // 3. Create browser-based Moxfield client (handles Cloudflare)
-  let client: Awaited<ReturnType<typeof createBrowserClient>>;
-  try {
-    client = await createBrowserClient({
-      baseUrl: 'https://api2.moxfield.com/v2',
-      timeoutMs: 60000,
-      headless: true,
-    });
-  } catch (error: unknown) {
-    if (error instanceof MoxfieldTimeoutError) {
-      console.error('Error: Could not reach Moxfield. The service may be temporarily unavailable.');
-    } else {
-      console.error('Error: Failed to launch browser. Make sure Chrome/Chromium is available.');
-    }
-    process.exit(1);
-  }
+const cacheDriverLabel = {
+  upstash: 'Upstash Redis (HTTP)',
+  redis: `Redis (TCP) → ${config.redisConnectionUrl}`,
+  memory: 'In-memory',
+} as const;
 
-  try {
-    // 4. Fetch user decks
-    console.error(`Fetching decks for "${username}"...`);
-    const deckSummaries = await client.fetchUserDecks(username);
+console.log(`
+🃏 Necro Nerds API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Port:        ${config.port}
+  Environment: ${config.nodeEnv}
+  Cache:       ${cacheDriverLabel[config.cacheDriver]}
+  Cache TTL:   ${config.cacheTtlSeconds}s
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`);
 
-    if (deckSummaries.length === 0) {
-      console.error(`No public decks found for user "${username}".`);
-      process.exit(1);
-    }
+serve({
+  fetch: app.fetch,
+  port: config.port,
+});
 
-    console.error(`Found ${deckSummaries.length} Commander deck(s). Fetching details...`);
+// ─── Graceful shutdown ──────────────────────────────────────────────────────
 
-    // 5. Fetch detail for each deck sequentially
-    const deckDetails = [];
-    for (const summary of deckSummaries) {
-      const detail = await client.fetchDeckDetail(summary.publicId);
-      deckDetails.push(detail);
-    }
-
-    // 6. Extract commanders from each deck
-    const extractions = deckDetails.map((deck) => extractCommanders(deck));
-
-    // 7. Log skipped decks to stderr
-    for (const extraction of extractions) {
-      if (extraction.skipped) {
-        console.error(`Skipping deck "${extraction.deckName}" — no commander found.`);
-      }
-    }
-
-    // 8. Organize decks into 32 color combination slots
-    const progress = organizeDecks(extractions, username);
-
-    // 9. Render ASCII diagram to stdout
-    const asciiOutput = renderASCII(progress);
-    console.log(asciiOutput);
-
-    // 10. Render HTML file to build/ directory
-    const buildDir = join(import.meta.dirname, '..', 'build');
-    mkdirSync(buildDir, { recursive: true });
-    const htmlPath = renderHTML(progress, { outputDir: buildDir });
-    console.log(`\nHTML output written to: ${htmlPath}`);
-  } catch (error: unknown) {
-    if (error instanceof MoxfieldUserNotFoundError) {
-      console.error(`Error: Moxfield user "${username}" not found.`);
-      process.exit(1);
-    }
-
-    if (error instanceof MoxfieldAPIError) {
-      console.error(
-        `Error: Moxfield API returned an error (${error.statusCode}). Please try again later.`
-      );
-      process.exit(1);
-    }
-
-    if (error instanceof MoxfieldTimeoutError) {
-      console.error(
-        'Error: Could not reach Moxfield. The service may be temporarily unavailable.'
-      );
-      process.exit(1);
-    }
-
-    // Unexpected errors
-    if (error instanceof Error) {
-      console.error(`Error: ${error.message}`);
-    } else {
-      console.error('An unexpected error occurred.');
-    }
-    process.exit(1);
-  } finally {
-    await client.close();
-  }
+async function shutdown(): Promise<void> {
+  console.log('\n🛑 Shutting down...');
+  await browser.shutdown();
+  process.exit(0);
 }
 
-main();
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

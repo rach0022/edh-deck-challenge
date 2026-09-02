@@ -1,40 +1,95 @@
-# 🃏 EDH 32 Deck Challenge Checker
+# 🃏 EDH 32 Deck Challenge — Web App
 
-A CLI tool that connects to your [Moxfield](https://www.moxfield.com) account, scans your Commander/EDH decks, and maps them to all 32 possible color identity slots — showing your progress toward the EDH 32 Deck Challenge.
+A full-stack Hono application that serves both a server-side rendered web UI and a JSON REST API for the EDH 32 Deck Challenge. Enter a Moxfield username and see which of the 32 color identity slots have been filled with Commander decks — plus discover infinite combos in each deck powered by Commander Spellbook, and match your card pool against a corpus of competitive (cEDH) decks.
 
-Produces both an ASCII terminal diagram and a self-contained HTML file with commander card art.
+No auth. No database. No sign-up. Just enter a username and go.
+
+> The older standalone CLI tool that this project started as has been relocated to [`utils/`](./utils). See `utils/README.md` for how to run it.
 
 ---
 
-## Features
+## Tech Stack
 
-- Fetches all your public Commander decks from Moxfield (handles pagination)
-- Bypasses Cloudflare bot protection using a headless browser (Puppeteer)
-- Identifies commanders and resolves color identity (supports partner commanders)
-- Maps decks to all 32 color combination slots (colorless through 5-color)
-- Renders a formatted ASCII progress chart to the terminal
-- Generates a standalone HTML file with commander card images and dark theme
-- Handles errors gracefully (user not found, timeouts, API errors)
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Web Framework** | [Hono](https://hono.dev) v4.7 | HTTP routing, middleware, JSX SSR |
+| **Runtime** | Node.js 22+ | ES modules, native fetch |
+| **Rendering** | Hono JSX | Server-side rendered HTML (no React, no client JS) |
+| **Browser Automation** | [Puppeteer](https://pptr.dev) v25 | Headless Chrome for Cloudflare bypass |
+| **Combo Detection** | [Commander Spellbook API](https://commanderspellbook.com) | Find EDH combos in decks |
+| **Cache (Production)** | [Upstash Redis](https://upstash.com) | HTTP-based serverless Redis |
+| **Cache (Local)** | [ioredis](https://github.com/redis/ioredis) v5 | Standard Redis via TCP (Docker) |
+| **Cache (Fallback)** | In-memory Map | Zero-config development fallback |
+| **Language** | TypeScript 5.8 | Strict mode, ES2022 target |
+| **Bundler** | tsc | Direct TypeScript compilation |
+| **Dev Server** | [tsx](https://github.com/privatenumber/tsx) | Hot-reload during development |
+| **Deployment** | Docker | Multi-stage Dockerfile for local containerized runs |
 
-## Prerequisites
+---
 
-- **Node.js** 18 or later (uses native `fetch`; recommended: 22+)
-- **npm** 7 or later
-- **Chrome/Chromium** (automatically downloaded by Puppeteer on install)
+## Project Structure
 
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/rach0022/edh-deck-challenge.git
-cd edh-deck-challenge
-
-# Install dependencies (includes Puppeteer which downloads Chromium)
-npm install
-
-# Build the project
-npm run build
 ```
+/ (repo root)
+├── src/                            # THE WEB APPLICATION (Hono SSR + API)
+│   ├── index.ts                    # Server entry point, route mounting
+│   ├── config.ts                   # Environment variable loading + cache driver detection
+│   ├── types.ts                    # All TypeScript interfaces
+│   │
+│   ├── domain/                     # Pure business logic (no I/O)
+│   │   ├── color-combinations.ts   # 32 color slot definitions
+│   │   ├── color-identity.ts       # WUBRG resolution + key conversion
+│   │   ├── commander-extractor.ts  # Extract commanders from deck data
+│   │   ├── deck-organizer.ts       # Map decks to 32 slots
+│   │   ├── deck-similarity.ts      # cEDH matching (normalized card-name sets)
+│   │   └── card-type.ts            # Card-type classification
+│   │
+│   ├── services/                   # I/O and orchestration
+│   │   ├── cache.ts                # Multi-driver cache (Upstash / ioredis / memory)
+│   │   ├── challenge.ts            # Main business logic orchestrator
+│   │   ├── cedh.ts                 # cEDH matching orchestrator
+│   │   ├── fx.ts                   # USD→CAD exchange-rate service
+│   │   ├── moxfield.ts             # Puppeteer-based Moxfield scraper
+│   │   └── spellbook.ts            # Commander Spellbook combo detection API client
+│   │
+│   ├── routes/                     # HTTP route handlers
+│   │   ├── challenge.ts            # JSON API endpoints (/api/*)
+│   │   ├── health.ts               # Health check endpoint
+│   │   └── pages.tsx               # SSR page routes
+│   │
+│   ├── views/                      # Hono JSX components (server-rendered)
+│   │   ├── layout.tsx              # Base HTML shell + all CSS
+│   │   ├── home.tsx                # Landing page with search form
+│   │   ├── challenge.tsx           # 32-slot progress grid (with combo badges)
+│   │   ├── cedh-match.tsx          # cEDH match results
+│   │   ├── deck-detail.tsx         # Single deck with card list + combos section
+│   │   ├── loading.tsx             # SSE loading page
+│   │   └── error.tsx               # Error page component
+│   │
+│   ├── middleware/
+│   │   └── error-handler.ts        # Maps domain errors to HTTP responses
+│   │
+│   ├── scripts/
+│   │   └── build-cedh-corpus.ts    # Generates src/data/cedh-corpus.json
+│   │
+│   ├── data/
+│   │   └── cedh-corpus.json        # Bundled cEDH reference corpus
+│   │
+│   └── public/
+│       └── favicon.svg             # Skull favicon
+│
+├── utils/                          # The relocated standalone CLI tool (see utils/README.md)
+├── dist/                           # Compiled output (git-ignored)
+├── .env.example                    # Environment variable template
+├── Dockerfile                      # Multi-stage production build
+├── docker-compose.yml
+├── render.yaml
+├── package.json
+├── package-lock.json
+└── tsconfig.json
+```
+
+---
 
 ## Running with Docker
 
@@ -66,157 +121,176 @@ APP_PORT=8080 docker compose up -d --build
 ```
 
 Or set it persistently by copying `.env.example` to `.env` (Docker Compose loads
-`.env` from this directory automatically) and editing the value:
+`.env` from this directory automatically) and editing the value.
+
+---
+
+## Running Locally
+
+### Prerequisites
+
+- **Node.js 22+** — `node --version` (this repo pins the version in `.nvmrc`)
+- **npm 7+** — `npm --version`
+- **Chrome/Chromium** — Puppeteer downloads its own on `npm install`
+
+### Quick Start
 
 ```bash
+npm install
 cp .env.example .env
-# then edit APP_PORT in .env
-docker compose up -d --build
+npm run dev
 ```
 
-## Usage
+Open `http://localhost:3000` in your browser.
+
+### With Local Redis
 
 ```bash
-# Run directly with node
-node dist/index.js <your-moxfield-username>
+# Start Redis container
+docker run -d --name redis-local -p 6379:6379 redis:alpine
 
-# Or use npm start
-npm start -- <your-moxfield-username>
+# Add to .env
+REDIS_URL=redis://localhost:6379
 
-# Or link globally and run anywhere
-npm link
-edh-deck-challenge <your-moxfield-username>
+# Start server
+npm run dev
 ```
 
-### Example
+### Available Scripts
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `npm run dev` | `tsx watch src/index.ts` | Dev server with hot reload |
+| `npm run build` | `tsc && cp static assets` | Compile TS + copy `public`/`data` to `dist` |
+| `npm run build:cedh` | `tsx src/scripts/build-cedh-corpus.ts` | Generate/refresh the cEDH corpus |
+| `npm start` | `node dist/index.js` | Run compiled production build |
+| `npm run typecheck` | `tsc --noEmit` | Type-check without emitting |
+| `npm test` | `vitest run` | Run the test suite |
+
+---
+
+## Endpoints
+
+### SSR Pages (HTML)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Landing page with username search form (mode toggle) |
+| GET | `/search?username=X&mode=challenge\|cedh` | Dispatches to the correct loading page based on mode |
+| GET | `/challenge/:username` | 32-slot progress grid with commander art |
+| GET | `/cedh/:username` | "Build a cEDH Deck" — top 5 closest competitive decks + buy lists |
+| GET | `/cedh/loading/:username` | Loading page for the cEDH match flow (SSE progress) |
+| GET | `/deck/:deckId` | Deck detail with cards grouped by type |
+| POST | `/refresh/:username` | Force refresh, redirects to challenge page |
+| POST | `/cedh/refresh/:username` | Force refresh of cEDH matches, redirects back |
+| GET | `/favicon.svg` | Skull favicon |
+
+### JSON API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Service health (cache + browser status) |
+| GET | `/api/challenge/:username` | Full challenge progress as JSON |
+| GET | `/api/decks/:username` | Flat list of all commander decks |
+| GET | `/api/deck/:deckId` | Single deck detail with card groupings |
+| POST | `/api/refresh/:username` | Force cache refresh, returns fresh data |
+
+---
+
+## Build a cEDH Deck
+
+In addition to the 32 Deck Challenge, the app can match a user's card pool
+against a corpus of known competitive (cEDH) decks and show the ones they're
+closest to being able to build.
+
+### How it works
+
+1. **Reference corpus** — A build script pulls the
+   [cEDH Decklist Database](https://cedh-decklist-database.com) (`database.json`),
+   keeps the `COMPETITIVE` archetypes, extracts their Moxfield decklist links,
+   and fetches each deck's full card list via the existing Moxfield service.
+   The result is written to `src/data/cedh-corpus.json` and bundled into the build.
+2. **User collection** — On request, the app fetches all of a user's legal
+   commander decks and takes the union of every card across them as their
+   "collection."
+3. **Matching** — Each reference deck is scored by *owned fraction*: of the
+   cards in that deck, how many does the user already own? Decks are ranked
+   best-first and the top 5 are shown, each with a **missing-cards buy list**.
+
+The similarity logic lives in `src/domain/deck-similarity.ts` (pure functions,
+normalized card-name matching). At runtime the corpus can also be overridden via
+a cache entry (`edh:cedh:corpus`) so it can be refreshed without a redeploy;
+otherwise the bundled file is used.
+
+### Generating / refreshing the corpus
 
 ```bash
-node dist/index.js mainframe
+# Generate the full corpus (launches Puppeteer, fetches ~110 decks)
+npm run build:cedh
+
+# Test with a small subset
+npm run build:cedh -- --limit=5
+
+# Include BREW-section decks as well as COMPETITIVE
+npm run build:cedh -- --include-brew
+
+# Write somewhere other than src/data/cedh-corpus.json
+npm run build:cedh -- --out=/tmp/corpus.json
 ```
 
-This will:
-1. Launch a headless browser to get past Cloudflare protection
-2. Fetch all public Commander decks for the given Moxfield user
-3. Print an ASCII progress chart to your terminal
-4. Write an HTML file (`<username>-edh-challenge.html`) to your current directory
+The generated `src/data/cedh-corpus.json` should be committed so it ships with
+the build. Because the cEDH metagame shifts over time, re-run `build:cedh`
+periodically to refresh it.
 
-### Example ASCII Output
+---
 
-```
-═══════════════════════════════════════════════════
-  EDH 32 Deck Challenge - mainframe
-═══════════════════════════════════════════════════
+## Configuration
 
-── Colorless ─────────────────────────────────────
-  Colorless : [empty]
+### Environment Variables
 
-── Mono Color ────────────────────────────────────
-  Mono White : Cloud, Midgar Mercenary
-  Mono Blue  : Thassa, Deep-Dwelling
-  Mono Black : Liliana, Heretical Healer // L...
-  Mono Red   : Clive, Ifrit's Dominant // Ifr...
-  Mono Green : Tifa Lockhart
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | `3000` | Server port |
+| `NODE_ENV` | No | `development` | Environment (`development`, `production`) |
+| `CACHE_DRIVER` | No | auto-detect | Cache backend: `upstash`, `redis`, or `memory` |
+| `REDIS_URL` | No | `redis://localhost:6379` | Redis connection URL (ioredis TCP driver) |
+| `UPSTASH_REDIS_REST_URL` | No | — | Upstash Redis REST URL |
+| `UPSTASH_REDIS_REST_TOKEN` | No | — | Upstash Redis REST token |
+| `CACHE_TTL_SECONDS` | No | `900` | Cache TTL in seconds (15 min default) |
+| `MOXFIELD_BASE_URL` | No | `https://api2.moxfield.com/v2` | Moxfield API base URL |
+| `PUPPETEER_TIMEOUT_MS` | No | `60000` | Puppeteer navigation timeout (ms) |
+| `PUPPETEER_HEADLESS` | No | `true` | Set to `false` to see browser window |
+| `APP_PORT` | No | `3000` | Host port that maps to the container (Docker Compose) |
 
-── Two Color ─────────────────────────────────────
-  Azorius (WU)  : [empty]
-  Orzhov (WB)   : Teysa Karlov
-  ...
+### Cache Driver Auto-Detection
 
-═══════════════════════════════════════════════════
-  Progress: 17/32 slots filled
-═══════════════════════════════════════════════════
-```
+When `CACHE_DRIVER` is not explicitly set:
 
-## Development
+1. If `UPSTASH_REDIS_REST_URL` AND `UPSTASH_REDIS_REST_TOKEN` are set → **Upstash** (HTTP)
+2. If `REDIS_URL` is set → **ioredis** (TCP)
+3. Otherwise → **In-memory** (resets on restart)
 
-```bash
-# Run tests
-npm test
+---
 
-# Run tests in watch mode
-npm run test:watch
+## Design Decisions
 
-# Type-check without emitting
-npx tsc --noEmit
-
-# Build
-npm run build
-```
-
-### Project Structure
-
-```
-src/
-├── index.ts                    # CLI entry point & pipeline orchestrator
-├── types.ts                    # Shared TypeScript interfaces
-├── validator.ts                # Username input validation
-├── api/
-│   ├── moxfield-client.ts     # Direct fetch client (types + errors)
-│   └── browser-client.ts      # Puppeteer-based client (Cloudflare bypass)
-├── domain/
-│   ├── color-combinations.ts   # 32 color slot definitions
-│   ├── color-identity.ts       # Color identity resolution
-│   ├── commander-extractor.ts  # Commander extraction from deck data
-│   └── deck-organizer.ts       # Maps decks to color slots
-└── renderers/
-    ├── ascii-renderer.ts       # Terminal ASCII output
-    └── html-renderer.ts        # Self-contained HTML generator
-
-tests/
-├── validator.test.ts
-├── validator.property.test.ts
-├── moxfield-client.test.ts
-├── commander-extractor.test.ts
-├── color-identity.property.test.ts
-├── deck-organizer.property.test.ts
-├── ascii-renderer.test.ts
-├── ascii-renderer.property.test.ts
-├── html-renderer.test.ts
-└── integration.test.ts
-```
-
-### Testing Approach
-
-The project uses a combination of:
-- **Unit tests** (vitest) for each module
-- **Property-based tests** (fast-check) to verify invariants like WUBRG sort order, slot mapping bijection, and name truncation bounds
-- **Integration tests** that exercise the full pipeline with mocked API responses
-
-## How It Works
-
-1. **Cloudflare Bypass** — Launches a headless Chrome instance via Puppeteer, navigates to moxfield.com to solve the Cloudflare challenge and obtain valid session cookies
-2. **Deck Fetching** — Uses the browser context to call Moxfield's search API (`/v2/decks/search?authorUserNames=...&fmt=commander`) which returns all commander decks for the user
-3. **Detail Fetching** — Fetches full deck data (`/v2/decks/all/{id}`) for each deck to get commander card information
-4. **Color Resolution** — Extracts commander(s) from each deck, computes the combined color identity (union for partners), and maps to one of 32 slots
-5. **Rendering** — Produces both an ASCII diagram (stdout) and a standalone HTML file with card art
-
-## Error Handling
-
-| Condition | Message | Exit Code |
-|---|---|---|
-| No username argument | `Usage: edh-challenge <moxfield-username>` | 1 |
-| Empty/whitespace username | `Error: Username is invalid...` | 1 |
-| User not found (404) | `Error: Moxfield user "X" not found.` | 1 |
-| API error (non-404) | `Error: Moxfield API returned an error (status)...` | 1 |
-| Connection timeout | `Error: Could not reach Moxfield...` | 1 |
-| No public decks | `No public decks found for user "X".` | 1 |
-| Deck has no commander | Skipped (logged to stderr), continues | — |
-
-## Tech Stack
-
-- **TypeScript** 7.x — strict mode, ES modules
-- **Puppeteer** — headless Chrome for Cloudflare bypass
-- **Vitest** — test runner
-- **fast-check** — property-based testing
-- **Node.js native fetch** — HTTP client (used within browser context)
+| Decision | Rationale |
+|----------|-----------|
+| No auth or database | Users just type a username — zero friction |
+| Hono JSX for SSR | No client-side JS bundle, fast page loads, single deploy unit |
+| Puppeteer for Moxfield | Moxfield API is behind Cloudflare WAF, no official API key available |
+| Commander Spellbook for combos | Free public REST API, no auth required, comprehensive combo database |
+| Non-blocking combo detection | Spellbook failures gracefully degrade (empty combos) — never breaks page |
+| Lazy browser init | Don't block startup; health checks stay fast on hosting platforms |
+| Shared browser instance | One Chromium process for all requests; auto-reconnects if stale |
+| Multi-cache driver | Works anywhere: free hosting (Upstash), local dev (Docker Redis), or zero-config (memory) |
+| Domain logic is pure | `domain/` modules have no I/O — easily testable |
 
 ---
 
 ## 🤖 AI Disclaimer
 
-This project was built entirely with [Kiro](https://kiro.dev), an AI-powered development environment by Amazon. The code, tests, specs, and this README were generated using **Claude Sonnet 4** (Anthropic) as the underlying model, orchestrated through Kiro's spec-driven workflow (requirements → design → tasks → implementation).
-
-No code was manually written — this serves as a demonstration of AI-assisted software development with spec-first methodology and property-based testing.
+This project was built entirely with [Kiro](https://kiro.dev), an AI-powered development environment by Amazon, orchestrated through Kiro's spec-driven workflow (requirements → design → tasks → implementation) with property-based testing.
 
 ## License
 
