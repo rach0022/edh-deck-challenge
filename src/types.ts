@@ -27,6 +27,15 @@ export interface MoxfieldDeckSummary {
   lastUpdatedAtUtc: string;
 }
 
+/**
+ * Which Moxfield board a card was found on. Ownership provenance for the
+ * cEDH-match and Build-a-Commander features:
+ *   - 'mainboard'  — actively in the deck (definitely owned; no badge)
+ *   - 'sideboard'  — a swap-in the user has flagged (shown with a "Sideboard" badge)
+ *   - 'maybeboard' — a card the user is "considering" (shown with a "Considering" badge)
+ */
+export type CardBoard = 'mainboard' | 'sideboard' | 'maybeboard';
+
 export interface MoxfieldDeckDetail {
   id: string;
   publicId: string;
@@ -34,6 +43,10 @@ export interface MoxfieldDeckDetail {
   format: string;
   commanders: Record<string, MoxfieldCardEntry>;
   mainboard: Record<string, MoxfieldCardEntry>;
+  /** Cards flagged as sideboard swaps (optional; may be absent/empty). */
+  sideboard?: Record<string, MoxfieldCardEntry>;
+  /** Cards the user is "considering" (optional; may be absent/empty). */
+  maybeboard?: Record<string, MoxfieldCardEntry>;
 }
 
 export interface MoxfieldCardEntry {
@@ -363,6 +376,12 @@ export interface ReferenceCard {
   scryfallId: string | null;
   /** Whether the user already owns this card (in any of their decks) */
   owned: boolean;
+  /**
+   * The board this owned card was found on across the user's decks
+   * (mainboard/sideboard/maybeboard). null when the user doesn't own it.
+   * Used to badge sideboard/considering matches.
+   */
+  board: CardBoard | null;
   /** Known price for this printing, in USD. null if unknown. */
   usd: number | null;
   /** Converted price in CAD using the cached FX rate. null if usd is null. */
@@ -471,6 +490,12 @@ export interface BuildCommanderCard {
   category: string;
   /** True when the card is in the user's owned set. */
   owned: boolean;
+  /**
+   * The board this owned card was found on (best across the user's decks:
+   * mainboard > sideboard > maybeboard). null for to-buy cards. Sideboard /
+   * maybeboard owned cards are badged so it's clear the user may not own them.
+   */
+  board: CardBoard | null;
   /** Deck names containing this card (Source_Decks); empty for to-buy cards. */
   sourceDecks: string[];
   /** Card art (art_crop) for compact display; null if unknown. */

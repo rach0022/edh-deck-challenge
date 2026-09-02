@@ -1725,6 +1725,55 @@ const css = `
     outline-offset: 2px;
   }
 
+  /* ─── Board provenance badge (sideboard/considering) ─── */
+
+  .board-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 100px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  /* Sideboard: amber. Considering (maybeboard): blue. */
+  .board-badge-sideboard {
+    background: rgba(240, 192, 64, 0.18);
+    color: #f0c040;
+    border: 1px solid rgba(240, 192, 64, 0.4);
+  }
+
+  .board-badge-maybeboard {
+    background: rgba(96, 165, 250, 0.18);
+    color: #93c5fd;
+    border: 1px solid rgba(96, 165, 250, 0.4);
+  }
+
+  /* Overlay variant used on the Build owned-card image (corner ribbon). */
+  .build-owned-imgwrap {
+    position: relative;
+    line-height: 0;
+  }
+
+  .build-owned-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    line-height: normal;
+  }
+
+  .build-owned-badge .board-badge {
+    margin-left: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
   /* ─── Build a Commander results page ─────── */
 
   .build-commander-art {

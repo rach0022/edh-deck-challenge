@@ -19,6 +19,7 @@ import type {
   ReferenceCardGroup,
 } from '../types.js';
 import { CARD_TYPE_ORDER, classifyCardType } from './card-type.js';
+import type { Collection } from './collection.js';
 
 /** Rounds a monetary amount to 2 decimal places. */
 function roundMoney(value: number): number {
@@ -60,7 +61,7 @@ export function buildCardSet(names: Iterable<string>): Set<string> {
  */
 export function scoreDeck(
   deck: CedhReferenceDeck,
-  ownedCards: Set<string>,
+  collection: Collection,
   usdToCad: number,
 ): CedhMatch {
   // Bucket cards by type category. The corpus decklist is already
@@ -77,7 +78,8 @@ export function scoreDeck(
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
 
-    const owned = ownedCards.has(normalized);
+    const owned = collection.has(normalized);
+    const board = owned ? collection.boardOf(normalized) : null;
     const usdRaw = typeof card.value === 'number' ? card.value : null;
     // Derive the single grouping category from the parsed type list.
     const type = classifyCardType(card.types.join(' '));
@@ -100,6 +102,7 @@ export function scoreDeck(
       manaCost: card.manaCost,
       scryfallId: card.scryfallId,
       owned,
+      board,
       usd: usdRaw == null ? null : roundMoney(usdRaw),
       cad: usdRaw == null ? null : roundMoney(usdRaw * usdToCad),
     };
@@ -162,13 +165,13 @@ export function scoreDeck(
  */
 export function rankMatches(
   decks: CedhReferenceDeck[],
-  ownedCards: Set<string>,
+  collection: Collection,
   usdToCad: number,
   limit = 5,
 ): CedhMatch[] {
   const scored = decks
     .filter((deck) => (deck.decklist?.length ?? 0) > 0)
-    .map((deck) => scoreDeck(deck, ownedCards, usdToCad));
+    .map((deck) => scoreDeck(deck, collection, usdToCad));
 
   scored.sort(
     (a, b) =>

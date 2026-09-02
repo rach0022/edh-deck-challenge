@@ -25,16 +25,27 @@
 
 import type {
   BuildCommanderCard,
+  CardBoard,
   EdhrecRecommendation,
 } from '../types.js';
-import { buildCardSet, normalizeCardName } from './deck-similarity.js';
+import { normalizeCardName } from './deck-similarity.js';
+import { strongerBoard } from './collection.js';
 
 /** A single user deck reduced to its name and its raw card names. */
 export interface UserDeckCards {
   /** The deck's display name (used for Source_Decks). */
   name: string;
-  /** Raw card names in the deck (normalization happens internally). */
+  /**
+   * Raw card names in the deck (normalization happens internally). Treated as
+   * mainboard for provenance when `boardCards` is not supplied.
+   */
   cardNames: string[];
+  /**
+   * Optional board-tagged cards (mainboard/sideboard/maybeboard). When present,
+   * this drives ownership provenance so sideboard/considering matches can be
+   * badged; `cardNames` is ignored in that case.
+   */
+  boardCards?: { name: string; board: CardBoard }[];
 }
 
 /**
@@ -49,6 +60,11 @@ export interface OwnedCardIndex {
   ownedSet: Set<string>;
   /** normalized card name → deck names whose card set contains it. */
   sourceDecks: Map<string, string[]>;
+  /**
+   * normalized card name → the strongest board it was found on across decks
+   * (mainboard > sideboard > maybeboard). Drives owned-card badging.
+   */
+  board: Map<string, CardBoard>;
   /** Number of decks that contributed to the index. */
   deckCount: number;
 }
@@ -78,24 +94,40 @@ export function buildOwnedCardIndex(
 ): OwnedCardIndex {
   const ownedSet = new Set<string>();
   const sourceDecks = new Map<string, string[]>();
+  const board = new Map<string, CardBoard>();
 
   for (const deck of decks) {
-    // Normalized, de-duplicated card names for this one deck.
-    const deckCardSet = buildCardSet(deck.cardNames);
-    for (const normalized of deckCardSet) {
+    // Board-tagged cards when supplied, else treat cardNames as mainboard.
+    const tagged: { name: string; board: CardBoard }[] = deck.boardCards
+      ? deck.boardCards
+      : deck.cardNames.map((name) => ({ name, board: 'mainboard' as CardBoard }));
+
+    // De-duplicate within this deck by normalized name, keeping the strongest
+    // board, so a deck contributes each card (and its deck name) only once.
+    const deckBoards = new Map<string, CardBoard>();
+    for (const { name, board: b } of tagged) {
+      const normalized = normalizeCardName(name);
+      if (!normalized) continue;
+      const existing = deckBoards.get(normalized);
+      deckBoards.set(normalized, existing ? strongerBoard(existing, b) : b);
+    }
+
+    for (const [normalized, b] of deckBoards) {
       ownedSet.add(normalized);
+
       const decksForCard = sourceDecks.get(normalized);
       if (decksForCard) {
-        // Guard against the same deck name appearing twice for a card
-        // (e.g. two decks that happen to share a display name).
         if (!decksForCard.includes(deck.name)) decksForCard.push(deck.name);
       } else {
         sourceDecks.set(normalized, [deck.name]);
       }
+
+      const existingBoard = board.get(normalized);
+      board.set(normalized, existingBoard ? strongerBoard(existingBoard, b) : b);
     }
   }
 
-  return { ownedSet, sourceDecks, deckCount: decks.length };
+  return { ownedSet, sourceDecks, board, deckCount: decks.length };
 }
 
 /**
@@ -123,6 +155,7 @@ export function partitionRecommendations(
       name: rec.name,
       category: rec.category,
       owned,
+      board: owned ? index.board.get(normalized) ?? null : null,
       sourceDecks: owned
         ? [...(index.sourceDecks.get(normalized) ?? [])].sort((a, b) =>
             a.localeCompare(b),

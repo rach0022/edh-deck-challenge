@@ -48,6 +48,7 @@ function ownedCard(overrides: Partial<BuildCommanderCard> = {}): BuildCommanderC
     name: 'Sol Ring',
     category: 'Ramp',
     owned: true,
+    board: 'mainboard',
     sourceDecks: ['My Atraxa Deck', 'Superfriends'],
     art: 'https://img/art/sol-ring',
     imageUrl: 'https://img/normal/sol-ring',
@@ -65,6 +66,7 @@ function toBuyCard(overrides: Partial<BuildCommanderCard> = {}): BuildCommanderC
     name: 'Cyclonic Rift',
     category: 'Interaction',
     owned: false,
+    board: null,
     sourceDecks: [],
     art: null,
     imageUrl: null,
@@ -294,6 +296,42 @@ describe('BuildPage', () => {
     expect(html).toContain('build-subtype-header');
     // Source-deck names appear in the caption (title attr lists all decks).
     expect(html).toContain('My Atraxa Deck');
+  });
+
+  it('badges owned cards found only on the sideboard / maybeboard', async () => {
+    // A section whose owned card came from the sideboard.
+    const owned = ownedCard({ name: 'Cyclonic Rift', board: 'sideboard', cardType: 'Instant' });
+    const considering = ownedCard({ name: 'Mystic Remora', board: 'maybeboard', cardType: 'Enchantment', scryfallId: 'mr-1' });
+    const res = await renderBuild(
+      buildResponse({
+        ownedCards: [owned, considering],
+        ownedCount: 2,
+        sections: [
+          {
+            name: 'High Synergy Cards',
+            ownedGroups: [
+              { type: 'Instant', cards: [owned] },
+              { type: 'Enchantment', cards: [considering] },
+            ],
+            toBuyGroups: [],
+            ownedCount: 2,
+            toBuyCount: 0,
+            toBuyTotalCad: 0,
+          },
+        ],
+      }),
+    );
+    expect(res).toContain('class="board-badge board-badge-sideboard"');
+    expect(res).toContain('>Sideboard<');
+    expect(res).toContain('class="board-badge board-badge-maybeboard"');
+    expect(res).toContain('>Considering<');
+  });
+
+  it('does not badge mainboard-owned cards', async () => {
+    // Default fixture owned cards are all mainboard → no rendered badge element.
+    const res = await renderBuild(buildResponse());
+    expect(res).not.toContain('class="board-badge board-badge-sideboard"');
+    expect(res).not.toContain('class="board-badge board-badge-maybeboard"');
   });
 
   it('renders EDHREC section headers', async () => {

@@ -9,6 +9,7 @@
  */
 
 import { Layout } from './layout.js';
+import { BoardBadge } from './board-badge.js';
 import type {
   CedhMatchResponse,
   CedhMatch,
@@ -141,6 +142,7 @@ function CardGroup({ group }: { group: ReferenceCardGroup }) {
                 card.name
               )}
               <ManaCost cost={card.manaCost} />
+              {card.owned && <BoardBadge board={card.board} />}
             </span>
             <span class="cedh-card-price">{cad(card.cad)}</span>
           </li>

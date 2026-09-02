@@ -17,6 +17,7 @@
  */
 
 import { Layout } from './layout.js';
+import { BoardBadge } from './board-badge.js';
 import type {
   BuildCommanderResponse,
   BuildSection,
@@ -64,16 +65,23 @@ function OwnedCard({ card }: { card: BuildCommanderCard }) {
 
   const inner = (
     <>
-      {card.imageUrl ? (
-        <img
-          class="build-owned-img"
-          src={card.imageUrl}
-          alt={card.name}
-          loading="lazy"
-        />
-      ) : (
-        <div class="build-owned-noimg">{card.name}</div>
-      )}
+      <div class="build-owned-imgwrap">
+        {card.imageUrl ? (
+          <img
+            class="build-owned-img"
+            src={card.imageUrl}
+            alt={card.name}
+            loading="lazy"
+          />
+        ) : (
+          <div class="build-owned-noimg">{card.name}</div>
+        )}
+        {card.board && card.board !== 'mainboard' && (
+          <span class="build-owned-badge">
+            <BoardBadge board={card.board} />
+          </span>
+        )}
+      </div>
       <div class="build-owned-caption">
         <span class="build-owned-name">{card.name}</span>
         {deckLabel && (

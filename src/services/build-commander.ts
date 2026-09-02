@@ -32,7 +32,7 @@ import type { EdhrecService } from './edhrec.js';
 import type { FxService } from './fx.js';
 import type { ScryfallService } from './scryfall.js';
 import type { ProgressCallback } from './challenge.js';
-import { extractDeckCardNames } from './cedh.js';
+import { extractDeckCardNames, extractDeckBoardCards } from './cedh.js';
 import {
   buildOwnedCardIndex,
   partitionRecommendations,
@@ -171,7 +171,11 @@ export function createBuildCommanderService(
       });
 
       const detail = await moxfield.fetchDeckDetail(summary.publicId);
-      decks.push({ name: detail.name, cardNames: extractDeckCardNames(detail) });
+      decks.push({
+        name: detail.name,
+        cardNames: extractDeckCardNames(detail),
+        boardCards: extractDeckBoardCards(detail),
+      });
     }
 
     return decks;

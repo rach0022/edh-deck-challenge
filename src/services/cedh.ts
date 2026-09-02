@@ -20,10 +20,11 @@ import type { CacheService } from './cache.js';
 import type { MoxfieldService } from './moxfield.js';
 import { extractCommanders } from '../domain/commander-extractor.js';
 import { resolveColorIdentity } from '../domain/color-identity.js';
-import { buildCardSet, normalizeCardName, rankMatches } from '../domain/deck-similarity.js';
+import { normalizeCardName, rankMatches } from '../domain/deck-similarity.js';
 import { parseTypeLine } from '../domain/card-type.js';
 import type { FxService } from './fx.js';
 import type {
+  CardBoard,
   CedhCorpus,
   CedhMatchResponse,
   Color,
@@ -31,6 +32,8 @@ import type {
   MoxfieldDeckDetail,
   UserDeckSummary,
 } from '../types.js';
+import type { CollectionEntry } from '../domain/collection.js';
+import { buildCollectionProvenance, toCollection } from '../domain/collection.js';
 import type { ProgressCallback } from './challenge.js';
 
 const CORPUS_CACHE_KEY = 'edh:cedh:corpus';
@@ -110,6 +113,37 @@ export function extractDeckCardNames(deck: MoxfieldDeckDetail): string[] {
   return extractDeckCards(deck).map((c) => c.name);
 }
 
+/**
+ * Extracts every card the user has in a deck, tagged with the board it was
+ * found on, for building collection provenance. Commanders count as mainboard
+ * (they're always played). Covers mainboard, sideboard, and maybeboard so the
+ * matchers can credit — and badge — sideboard/considering cards.
+ *
+ * Unlike `extractDeckCards` (which powers the reference corpus and is
+ * mainboard-only), this is used only for the *user's* collection.
+ */
+export function extractDeckBoardCards(deck: MoxfieldDeckDetail): CollectionEntry[] {
+  const entries: CollectionEntry[] = [];
+
+  const addBoard = (
+    zone: Record<string, { card?: { name?: string } }> | undefined,
+    board: CardBoard,
+  ) => {
+    for (const entry of Object.values(zone ?? {})) {
+      const name = entry?.card?.name;
+      if (name) entries.push({ name, board });
+    }
+  };
+
+  // Commanders are actively played → mainboard.
+  addBoard(deck.commanders, 'mainboard');
+  addBoard(deck.mainboard, 'mainboard');
+  addBoard(deck.sideboard, 'sideboard');
+  addBoard(deck.maybeboard, 'maybeboard');
+
+  return entries;
+}
+
 export interface CedhService {
   getMatches(
     username: string,
@@ -169,8 +203,10 @@ export function createCedhService(
       detail: `${summaries.length} commander decks found`,
     });
 
-    // Build the user's collection: union of all card names across all decks.
-    const collection = new Set<string>();
+    // Build the user's collection across ALL boards (mainboard + sideboard +
+    // maybeboard), tracking which board each card came from so sideboard /
+    // considering matches can be credited and badged.
+    const collectionEntries: CollectionEntry[] = [];
     const userDecks: UserDeckSummary[] = [];
 
     for (let i = 0; i < summaries.length; i++) {
@@ -186,9 +222,8 @@ export function createCedhService(
       const detail = await moxfield.fetchDeckDetail(summary.publicId);
       const cardNames = extractDeckCardNames(detail);
 
-      // Merge into the normalized collection set.
-      const deckSet = buildCardSet(cardNames);
-      for (const name of deckSet) collection.add(name);
+      // Collect every card (all boards) tagged with its board.
+      collectionEntries.push(...extractDeckBoardCards(detail));
 
       // Build the user-facing deck summary.
       const extraction = extractCommanders(detail);
@@ -212,6 +247,7 @@ export function createCedhService(
     }
 
     // Rank against the reference corpus, priced in CAD using the cached rate.
+    const collection = toCollection(buildCollectionProvenance(collectionEntries));
     emit({
       phase: 'matching',
       message: 'Matching against cEDH decks...',

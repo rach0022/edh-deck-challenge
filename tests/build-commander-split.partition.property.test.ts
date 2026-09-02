@@ -79,6 +79,7 @@ const arbOwnedIndex: fc.Arbitrary<OwnedCardIndex> = fc
   .map((names) => {
     const ownedSet = new Set<string>();
     const sourceDecks = new Map<string, string[]>();
+    const board = new Map<string, 'mainboard' | 'sideboard' | 'maybeboard'>();
     for (const raw of names) {
       const normalized = normalizeCardName(raw);
       if (normalized.length === 0) continue;
@@ -86,8 +87,9 @@ const arbOwnedIndex: fc.Arbitrary<OwnedCardIndex> = fc
       if (!sourceDecks.has(normalized)) {
         sourceDecks.set(normalized, ['Deck']);
       }
+      board.set(normalized, 'mainboard');
     }
-    return { ownedSet, sourceDecks, deckCount: 1 };
+    return { ownedSet, sourceDecks, board, deckCount: 1 };
   });
 
 describe('Property 9: Owned/To-Buy split is a total, disjoint partition', () => {
@@ -155,6 +157,7 @@ describe('Property 9: Owned/To-Buy split is a total, disjoint partition', () => 
         const emptyIndex: OwnedCardIndex = {
           ownedSet: new Set<string>(),
           sourceDecks: new Map<string, string[]>(),
+          board: new Map(),
           deckCount: 0,
         };
         const split = partitionRecommendations(recommendations, emptyIndex);
