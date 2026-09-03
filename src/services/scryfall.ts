@@ -26,6 +26,8 @@ import type { CacheService } from './cache.js';
 import {
   buildScryfallQueryParam,
   buildAutocompleteCacheKey,
+  buildCheapestPrintingQueryParam,
+  buildCheapestPrintingCacheKey,
   meetsMinimumLength,
   type Legality,
 } from '../domain/scryfall-query.js';
@@ -101,6 +103,14 @@ export interface ScryfallService {
    * Individual batch failures degrade to "absent" rather than throwing.
    */
   getCardsByIds(ids: string[]): Promise<Map<string, CardDetails>>;
+  /**
+   * Resolves the cheapest USD price across *all commander-legal printings* of
+   * an exact card name (non-foil price preferred, foil as a fallback per
+   * printing). Returns null when the card has no known price or isn't legal in
+   * Commander. Cached per card name. A Scryfall outage degrades to null rather
+   * than throwing so a corpus build can proceed.
+   */
+  getCheapestUsdByName(cardName: string): Promise<number | null>;
 }
 
 // ─── Scryfall API response shapes (only the fields we consume) ───────────────
@@ -146,6 +156,42 @@ function coercePrice(value: unknown): number | null {
   if (value == null) return null;
   const n = typeof value === 'number' ? value : parseFloat(String(value));
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Sleeps for the given number of milliseconds. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Parses an HTTP `Retry-After` header into milliseconds. Supports both the
+ * delta-seconds form (e.g. "5") and the HTTP-date form. Returns 0 when the
+ * header is absent or unparseable, letting the caller fall back to its own
+ * backoff schedule.
+ */
+function parseRetryAfterMs(header: string | null): number {
+  if (!header) return 0;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  return 0;
+}
+
+/**
+ * Reduces a list of Scryfall printings to the cheapest known USD price. Each
+ * printing contributes its non-foil `usd` when present, otherwise its
+ * `usd_foil`; printings with no usable price are skipped. Returns null when no
+ * printing has a price. Exported for unit testing the cheapest-of logic.
+ */
+export function cheapestPrintingUsd(cards: readonly ScryfallCard[]): number | null {
+  let cheapest: number | null = null;
+  for (const card of cards) {
+    const price = coercePrice(card.prices?.usd) ?? coercePrice(card.prices?.usd_foil);
+    if (price == null) continue;
+    if (cheapest == null || price < cheapest) cheapest = price;
+  }
+  return cheapest;
 }
 
 /**
@@ -204,29 +250,53 @@ export function createScryfallService(
    * Throws `ScryfallUnavailableError` only on timeout/network failure — HTTP
    * error statuses are returned to the caller to interpret (a 404 from the
    * exact-name endpoint means "not found", not "unavailable").
+   *
+   * Automatically retries on HTTP 429 (rate limited) with exponential backoff,
+   * honoring the `Retry-After` response header when present. Scryfall throttles
+   * aggressively when a client bursts requests, so a single transient 429 must
+   * not be surfaced as "no price" — that would silently blank out most cards
+   * during a corpus build. After exhausting retries the 429 is returned to the
+   * caller like any other status.
    */
   async function scryfallGet(url: string): Promise<{ status: number; body: unknown }> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.scryfallTimeoutMs);
-    try {
-      const res = await fetch(url, {
-        headers: SCRYFALL_HEADERS,
-        signal: controller.signal,
-      });
-      // Scryfall returns JSON for both success and error payloads.
-      let body: unknown = null;
+    const maxRetries = 4;
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), config.scryfallTimeoutMs);
       try {
-        body = await res.json();
-      } catch {
-        body = null;
+        const res = await fetch(url, {
+          headers: SCRYFALL_HEADERS,
+          signal: controller.signal,
+        });
+
+        // Rate limited: back off and retry (honoring Retry-After) unless we've
+        // run out of attempts.
+        if (res.status === 429 && attempt < maxRetries) {
+          clearTimeout(timer);
+          const retryAfter = parseRetryAfterMs(res.headers.get('retry-after'));
+          // Exponential backoff (1s, 2s, 4s, 8s) with jitter, floored by any
+          // server-provided Retry-After hint.
+          const backoff = Math.max(retryAfter, 1000 * 2 ** attempt) + Math.floor(Math.random() * 250);
+          console.warn(`Scryfall rate limited (429); retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries}).`);
+          await sleep(backoff);
+          continue;
+        }
+
+        // Scryfall returns JSON for both success and error payloads.
+        let body: unknown = null;
+        try {
+          body = await res.json();
+        } catch {
+          body = null;
+        }
+        return { status: res.status, body };
+      } catch (error) {
+        // AbortError (timeout) or a network failure — neither is recoverable here.
+        console.error('Scryfall request failed:', error);
+        throw new ScryfallUnavailableError();
+      } finally {
+        clearTimeout(timer);
       }
-      return { status: res.status, body };
-    } catch (error) {
-      // AbortError (timeout) or a network failure — neither is recoverable here.
-      console.error('Scryfall request failed:', error);
-      throw new ScryfallUnavailableError();
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -331,6 +401,45 @@ export function createScryfallService(
       const suggestion = toSuggestion(body as ScryfallCard);
       await cache.set(cacheKey, suggestion, config.cacheTtlSeconds);
       return suggestion;
+    },
+
+    async getCheapestUsdByName(cardName: string): Promise<number | null> {
+      const trimmed = cardName.trim();
+      if (!trimmed) return null;
+
+      // Serve from cache first (null is a valid, cacheable outcome — distinguish
+      // an absent entry from a cached "no price" using a sentinel wrapper).
+      const cacheKey = buildCheapestPrintingCacheKey(trimmed);
+      const cached = await cache.get<{ usd: number | null }>(cacheKey);
+      if (cached) return cached.usd;
+
+      // `unique=prints` returns one row per printing; `order=usd` puts the
+      // cheapest first, but we still reduce defensively across the page in case
+      // some rows lack a price.
+      const q = buildCheapestPrintingQueryParam(trimmed);
+      const url = `${config.scryfallBaseUrl}/cards/search?q=${q}&unique=prints&order=usd&dir=asc`;
+
+      let usd: number | null = null;
+      try {
+        const { status, body } = await scryfallGet(url);
+        // 404 = no commander-legal printing matched → no price.
+        if (status === 404) {
+          usd = null;
+        } else if (status < 200 || status >= 300) {
+          // Unexpected status: don't poison the cache, just return null.
+          console.error(`Scryfall cheapest-printing returned HTTP ${status}.`);
+          return null;
+        } else {
+          const data = (body as ScryfallSearchResponse | null)?.data ?? [];
+          usd = cheapestPrintingUsd(data);
+        }
+      } catch {
+        // Scryfall unavailable — degrade to null without caching.
+        return null;
+      }
+
+      await cache.set(cacheKey, { usd }, config.cacheTtlSeconds);
+      return usd;
     },
 
     async getCardsByIds(ids: string[]): Promise<Map<string, CardDetails>> {

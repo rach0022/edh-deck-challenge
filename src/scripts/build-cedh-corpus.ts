@@ -137,6 +137,10 @@ function planDecks(
   return planned;
 }
 
+/**
+ * Flattens the database into a de-duplicated list of Moxfield decks to fetch.
+ * The same publicId can appear under multiple archetypes; we keep the first.
+ */
 async function main(): Promise<void> {
   const { limit, includeBrew, outPath } = parseArgs(process.argv.slice(2));
 

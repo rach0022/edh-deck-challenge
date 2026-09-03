@@ -83,3 +83,36 @@ export function buildScryfallQueryParam(query: string, legality: Legality): stri
 export function buildAutocompleteCacheKey(query: string, legality: Legality): string {
   return `edh:scryfall:${legality}:${normalizeQuery(query)}`;
 }
+
+/**
+ * Builds the raw (un-encoded) Scryfall search query that returns *every*
+ * commander-legal printing of an exact card name, e.g.
+ * `!"Sol Ring" legal:commander`.
+ *
+ * `!"…"` is Scryfall's exact-name operator (so "Bolt" won't also match
+ * "Lightning Bolt"), and `legal:commander` restricts to printings of cards
+ * that are legal in the Commander format. Pair this with `unique=prints` on the
+ * request so Scryfall returns one row per printing rather than collapsing to a
+ * single card — that's what lets the caller pick the cheapest printing.
+ */
+export function buildCheapestPrintingQuery(cardName: string): string {
+  // Escape any embedded double-quotes so the exact-name operator stays valid.
+  const safe = cardName.trim().replace(/"/g, '\\"');
+  return `!"${safe}" legal:commander`;
+}
+
+/**
+ * URL-encoded value for the cheapest-printing search `q` parameter. The caller
+ * appends `&unique=prints` (and optionally `&order=usd`) to the request URL.
+ */
+export function buildCheapestPrintingQueryParam(cardName: string): string {
+  return encodeURIComponent(buildCheapestPrintingQuery(cardName));
+}
+
+/**
+ * Deterministic cache key for a cheapest-commander-legal-printing lookup,
+ * keyed by the lowercased, whitespace-normalized card name.
+ */
+export function buildCheapestPrintingCacheKey(cardName: string): string {
+  return `edh:scryfall:cheapest:${normalizeQuery(cardName)}`;
+}

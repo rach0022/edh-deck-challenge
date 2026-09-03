@@ -294,8 +294,10 @@ export interface DecklistCard {
   /** Display name, e.g. "Faeburrow Elder" */
   name: string;
   /**
-   * Cheapest known price for the printing in this decklist, in USD
-   * (Moxfield's prices.usd, falling back to usd_foil). null if unavailable.
+   * Cheapest known price for this card in USD. Built from the minimum across
+   * all commander-legal printings on Scryfall (non-foil preferred, foil as a
+   * fallback), falling back to the Moxfield printing price when Scryfall has
+   * none. null if unavailable.
    */
   value: number | null;
   /**
@@ -491,9 +493,10 @@ export interface BuildCommanderCard {
   /** True when the card is in the user's owned set. */
   owned: boolean;
   /**
-   * The board this owned card was found on (best across the user's decks:
-   * mainboard > sideboard > maybeboard). null for to-buy cards. Sideboard /
-   * maybeboard owned cards are badged so it's clear the user may not own them.
+   * The board this card was found on (best across the user's decks:
+   * mainboard > sideboard > maybeboard). null for to-buy cards. A mainboard
+   * match is a truly owned card; sideboard / maybeboard matches are surfaced
+   * as "considering" cards and badged so it's clear the user may not own them.
    */
   board: CardBoard | null;
   /** Deck names containing this card (Source_Decks); empty for to-buy cards. */
@@ -531,15 +534,26 @@ export interface BuildSection {
   name: string;
   /** Owned cards in this section, grouped by card type (shown as images). */
   ownedGroups: BuildTypeGroup[];
+  /**
+   * Cards in this section the user only has on a sideboard/maybeboard, grouped
+   * by card type. Shown in a collapsible section with a board badge — not
+   * counted as owned.
+   */
+  consideringGroups: BuildTypeGroup[];
   /** To-buy cards in this section, grouped by card type (shown as a card list). */
   toBuyGroups: BuildTypeGroup[];
   /** Count of owned cards in this section. */
   ownedCount: number;
+  /** Count of considering (sideboard/maybeboard) cards in this section. */
+  consideringCount: number;
   /** Count of to-buy cards in this section. */
   toBuyCount: number;
   /** Sum of CAD prices of priced to-buy cards in this section. */
   toBuyTotalCad: number;
 }
+
+/** The role a header card image plays in the selection. */
+export type CommanderImageRole = 'commander' | 'partner' | 'companion';
 
 /** A selected commander with its full card image, for the results header. */
 export interface CommanderImage {
@@ -548,6 +562,8 @@ export interface CommanderImage {
   imageUrl: string | null;
   /** Scryfall id for linking, or null. */
   scryfallId: string | null;
+  /** Whether this is the commander, its partner, or the companion. */
+  role: CommanderImageRole;
 }
 
 /** Full response for the Build-a-Commander results page. */
@@ -561,15 +577,23 @@ export interface BuildCommanderResponse {
   sections: BuildSection[];
   /**
    * The selected commander(s) with full card images for the page header — the
-   * primary commander first, then the partner when present. Entries whose card
-   * image couldn't be resolved from Scryfall are omitted.
+   * primary commander first, then the partner, then the companion when present.
+   * Each entry carries its role so the header can label the companion. Entries
+   * whose card image couldn't be resolved from Scryfall are still included
+   * (with a null image) so the role/name always shows.
    */
   commanderImages: CommanderImage[];
   /** Flat list of owned recommendations (across all sections, de-duplicated). */
   ownedCards: BuildCommanderCard[];
+  /**
+   * Flat list of "considering" recommendations — cards the user only has on a
+   * sideboard/maybeboard (across all sections, de-duplicated).
+   */
+  consideringCards: BuildCommanderCard[];
   /** Flat list of to-buy recommendations (across all sections, de-duplicated). */
   toBuyCards: BuildCommanderCard[];
   ownedCount: number;
+  consideringCount: number;
   toBuyCount: number;
   /** Sum of CAD prices of priced to-buy cards. */
   buyListTotalCad: number;

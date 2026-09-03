@@ -92,60 +92,136 @@ const arbOwnedIndex: fc.Arbitrary<OwnedCardIndex> = fc
     return { ownedSet, sourceDecks, board, deckCount: 1 };
   });
 
-describe('Property 9: Owned/To-Buy split is a total, disjoint partition', () => {
+/**
+ * A variant owned index that tags each name with an arbitrary board, so the
+ * partition's three-way split (owned = mainboard, considering =
+ * sideboard/maybeboard, to-buy = absent) is exercised across all boards.
+ */
+const arbOwnedIndexWithBoards: fc.Arbitrary<OwnedCardIndex> = fc
+  .array(
+    fc.tuple(
+      arbCardName,
+      fc.constantFrom<'mainboard' | 'sideboard' | 'maybeboard'>(
+        'mainboard',
+        'sideboard',
+        'maybeboard',
+      ),
+    ),
+    { minLength: 0, maxLength: 30 },
+  )
+  .map((pairs) => {
+    const ownedSet = new Set<string>();
+    const sourceDecks = new Map<string, string[]>();
+    const board = new Map<string, 'mainboard' | 'sideboard' | 'maybeboard'>();
+    for (const [raw, b] of pairs) {
+      const normalized = normalizeCardName(raw);
+      if (normalized.length === 0) continue;
+      ownedSet.add(normalized);
+      if (!sourceDecks.has(normalized)) sourceDecks.set(normalized, ['Deck']);
+      // First occurrence wins for the test's expectation; the impl also keeps
+      // one board per name, so we mirror "first seen" here.
+      if (!board.has(normalized)) board.set(normalized, b);
+    }
+    return { ownedSet, sourceDecks, board, deckCount: 1 };
+  });
+
+describe('Property 9: Owned/Considering/To-Buy split is a total, disjoint partition', () => {
   /**
    * **Validates: Requirements 6.3, 6.4, 7.2, 12.5**
    *
-   * For any recommendations and any owned-card set, the owned and to-buy
-   * groups together contain exactly the recommendations (total) with no
-   * overlap (disjoint); each recommendation is owned iff its normalized name
-   * is in the owned set; and the counts add up to the input length.
+   * For any recommendations and any owned-card set, the owned, considering,
+   * and to-buy groups together contain exactly the recommendations (total)
+   * with no overlap (disjoint); a recommendation is owned iff it's on the
+   * mainboard, considering iff it's only on sideboard/maybeboard, to-buy iff
+   * it's absent; and the three counts add up to the input length.
    */
   it('every recommendation lands in exactly one group and counts add up', () => {
     fc.assert(
-      fc.property(arbRecommendations, arbOwnedIndex, (recommendations, index) => {
-        const split = partitionRecommendations(recommendations, index);
+      fc.property(
+        arbRecommendations,
+        arbOwnedIndexWithBoards,
+        (recommendations, index) => {
+          const split = partitionRecommendations(recommendations, index);
 
-        // Counts match group sizes and the input length (total).
-        expect(split.ownedCount).toBe(split.ownedCards.length);
-        expect(split.toBuyCount).toBe(split.toBuyCards.length);
-        expect(split.ownedCount + split.toBuyCount).toBe(
-          recommendations.length,
-        );
+          // Counts match group sizes and the input length (total).
+          expect(split.ownedCount).toBe(split.ownedCards.length);
+          expect(split.consideringCount).toBe(split.consideringCards.length);
+          expect(split.toBuyCount).toBe(split.toBuyCards.length);
+          expect(
+            split.ownedCount + split.consideringCount + split.toBuyCount,
+          ).toBe(recommendations.length);
 
-        // Membership rule: owned iff normalized name ∈ owned set.
-        for (const card of split.ownedCards) {
-          expect(index.ownedSet.has(normalizeCardName(card.name))).toBe(true);
-        }
-        for (const card of split.toBuyCards) {
-          expect(index.ownedSet.has(normalizeCardName(card.name))).toBe(false);
-        }
-      }),
+          // Membership rules by board.
+          for (const card of split.ownedCards) {
+            expect(index.board.get(normalizeCardName(card.name))).toBe(
+              'mainboard',
+            );
+          }
+          for (const card of split.consideringCards) {
+            const b = index.board.get(normalizeCardName(card.name));
+            expect(b === 'sideboard' || b === 'maybeboard').toBe(true);
+          }
+          for (const card of split.toBuyCards) {
+            expect(index.ownedSet.has(normalizeCardName(card.name))).toBe(false);
+          }
+        },
+      ),
       { numRuns: 100 },
     );
   });
 
   it('is a disjoint, order-preserving partition of the input names', () => {
     fc.assert(
+      fc.property(
+        arbRecommendations,
+        arbOwnedIndexWithBoards,
+        (recommendations, index) => {
+          const split = partitionRecommendations(recommendations, index);
+
+          // Reconstructing the input by splicing the three groups back together
+          // in recommendation order yields exactly the input names — proving
+          // totality (nothing dropped/added) and disjointness (nothing
+          // duplicated across groups).
+          const ownedQueue = [...split.ownedCards];
+          const consideringQueue = [...split.consideringCards];
+          const toBuyQueue = [...split.toBuyCards];
+          const reconstructed: string[] = [];
+          for (const rec of recommendations) {
+            const b = index.board.get(normalizeCardName(rec.name)) ?? null;
+            const next =
+              b === 'mainboard'
+                ? ownedQueue.shift()
+                : b === 'sideboard' || b === 'maybeboard'
+                  ? consideringQueue.shift()
+                  : toBuyQueue.shift();
+            expect(next).toBeDefined();
+            reconstructed.push(next!.name);
+          }
+          expect(ownedQueue).toHaveLength(0);
+          expect(consideringQueue).toHaveLength(0);
+          expect(toBuyQueue).toHaveLength(0);
+          expect(reconstructed).toEqual(recommendations.map((r) => r.name));
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('a mainboard-only owned set never produces considering cards', () => {
+    fc.assert(
       fc.property(arbRecommendations, arbOwnedIndex, (recommendations, index) => {
         const split = partitionRecommendations(recommendations, index);
 
-        // Reconstructing the input by splicing the two groups back together in
-        // recommendation order yields exactly the input names — this proves
-        // both totality (nothing dropped/added) and disjointness (nothing
-        // duplicated across groups).
-        const ownedQueue = [...split.ownedCards];
-        const toBuyQueue = [...split.toBuyCards];
-        const reconstructed: string[] = [];
-        for (const rec of recommendations) {
-          const owned = index.ownedSet.has(normalizeCardName(rec.name));
-          const next = owned ? ownedQueue.shift() : toBuyQueue.shift();
-          expect(next).toBeDefined();
-          reconstructed.push(next!.name);
+        // arbOwnedIndex tags everything mainboard, so nothing is "considering".
+        expect(split.consideringCount).toBe(0);
+        expect(split.ownedCount + split.toBuyCount).toBe(recommendations.length);
+
+        for (const card of split.ownedCards) {
+          expect(index.ownedSet.has(normalizeCardName(card.name))).toBe(true);
         }
-        expect(ownedQueue).toHaveLength(0);
-        expect(toBuyQueue).toHaveLength(0);
-        expect(reconstructed).toEqual(recommendations.map((r) => r.name));
+        for (const card of split.toBuyCards) {
+          expect(index.ownedSet.has(normalizeCardName(card.name))).toBe(false);
+        }
       }),
       { numRuns: 100 },
     );
@@ -164,6 +240,7 @@ describe('Property 9: Owned/To-Buy split is a total, disjoint partition', () => 
 
         expect(split.ownedCount).toBe(0);
         expect(split.ownedCards).toHaveLength(0);
+        expect(split.consideringCount).toBe(0);
         expect(split.toBuyCount).toBe(recommendations.length);
       }),
       { numRuns: 100 },
@@ -179,10 +256,13 @@ describe('Property 9: Owned/To-Buy split is a total, disjoint partition', () => 
 
         // The convenience wrapper is the same partition plus the deck count.
         expect(viaConvenience.deckCount).toBe(index.deckCount);
-        expect(viaConvenience.ownedCount + viaConvenience.toBuyCount).toBe(
-          recommendations.length,
-        );
+        expect(
+          viaConvenience.ownedCount +
+            viaConvenience.consideringCount +
+            viaConvenience.toBuyCount,
+        ).toBe(recommendations.length);
         expect(viaConvenience.ownedCount).toBe(viaParts.ownedCount);
+        expect(viaConvenience.consideringCount).toBe(viaParts.consideringCount);
         expect(viaConvenience.toBuyCount).toBe(viaParts.toBuyCount);
       }),
       { numRuns: 100 },

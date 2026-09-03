@@ -41,6 +41,13 @@ function scryfallUrl(id: string): string {
   return `https://scryfall.com/card/${id}`;
 }
 
+/** Header label shown under each commander/partner/companion card image. */
+const ROLE_LABEL: Record<CommanderImage['role'], string> = {
+  commander: 'Commander',
+  partner: 'Partner',
+  companion: 'Companion',
+};
+
 /**
  * Reconstructs the selection query string used by the results URL so the
  * refresh form posts to `/build/refresh/<username>?commander=…&partner=…&companion=…`.
@@ -174,7 +181,11 @@ function Section({ section }: { section: BuildSection }) {
       <h2 class="build-section-header">
         {section.name}
         <span class="build-section-meta">
-          {section.ownedCount} owned · {section.toBuyCount} to buy
+          {section.ownedCount} owned
+          {section.consideringCount > 0 && (
+            <> · {section.consideringCount} considering</>
+          )}{' '}
+          · {section.toBuyCount} to buy
         </span>
       </h2>
 
@@ -189,6 +200,23 @@ function Section({ section }: { section: BuildSection }) {
         <p class="build-section-empty">
           You don't own any of the recommended cards in this section yet.
         </p>
+      )}
+
+      {/* Considering cards — in the user's sideboard/maybeboard, not counted as
+          owned. Collapsible image gallery; each card badged. */}
+      {section.consideringCount > 0 && (
+        <details class="build-considering">
+          <summary>
+            Show {section.consideringCount} card
+            {section.consideringCount === 1 ? '' : 's'} you're considering
+            (sideboard / maybeboard)
+          </summary>
+          <div class="build-owned-groups">
+            {section.consideringGroups.map((group) => (
+              <OwnedTypeGroup group={group} />
+            ))}
+          </div>
+        </details>
       )}
 
       {/* To-buy cards — collapsible text list, grouped by card type. */}
@@ -221,6 +249,7 @@ export function BuildPage({ result, cached }: BuildPageProps) {
     edhrecRank,
     edhrecNumDecks,
     ownedCount,
+    consideringCount,
     toBuyCount,
     buyListTotalCad,
     deckCount,
@@ -239,23 +268,30 @@ export function BuildPage({ result, cached }: BuildPageProps) {
         <h1>Build {selectionNames.join(' & ')}</h1>
         {commanderImages.length > 0 && (
           <div class="build-commander-art">
-            {commanderImages.map((cmd: CommanderImage) =>
-              cmd.imageUrl ? (
-                cmd.scryfallId ? (
-                  <a
-                    href={`https://scryfall.com/card/${cmd.scryfallId}`}
-                    target="_blank"
-                    rel="noopener"
-                    class="build-commander-art-link"
-                    aria-label={cmd.name}
-                  >
+            {commanderImages.map((cmd: CommanderImage) => (
+              <figure class={`build-commander-slot build-commander-${cmd.role}`}>
+                {cmd.imageUrl ? (
+                  cmd.scryfallId ? (
+                    <a
+                      href={`https://scryfall.com/card/${cmd.scryfallId}`}
+                      target="_blank"
+                      rel="noopener"
+                      class="build-commander-art-link"
+                      aria-label={cmd.name}
+                    >
+                      <img src={cmd.imageUrl} alt={cmd.name} loading="lazy" />
+                    </a>
+                  ) : (
                     <img src={cmd.imageUrl} alt={cmd.name} loading="lazy" />
-                  </a>
+                  )
                 ) : (
-                  <img src={cmd.imageUrl} alt={cmd.name} loading="lazy" />
-                )
-              ) : null,
-            )}
+                  <div class="build-commander-noimg">{cmd.name}</div>
+                )}
+                <figcaption class="build-commander-role">
+                  {ROLE_LABEL[cmd.role]}
+                </figcaption>
+              </figure>
+            ))}
           </div>
         )}
         <p class="build-selection">
@@ -283,8 +319,15 @@ export function BuildPage({ result, cached }: BuildPageProps) {
         )}
         <p class="progress-text">
           EDHREC's recommendations for this commander, grouped by section. You
-          own <strong>{ownedCount}</strong> of the recommended cards and still
-          need <strong>{toBuyCount}</strong>, built from{' '}
+          own <strong>{ownedCount}</strong> of the recommended cards
+          {consideringCount > 0 && (
+            <>
+              {' '}
+              (with <strong>{consideringCount}</strong> more in your sideboard /
+              maybeboard)
+            </>
+          )}{' '}
+          and still need <strong>{toBuyCount}</strong>, built from{' '}
           <strong>{deckCount}</strong> commander deck
           {deckCount === 1 ? '' : 's'}.
           {cached && (
@@ -324,6 +367,12 @@ export function BuildPage({ result, cached }: BuildPageProps) {
           <span class="build-summary-num">{ownedCount}</span>
           <span class="build-summary-label">owned</span>
         </div>
+        {consideringCount > 0 && (
+          <div class="build-summary-stat">
+            <span class="build-summary-num">{consideringCount}</span>
+            <span class="build-summary-label">considering</span>
+          </div>
+        )}
         <div class="build-summary-stat">
           <span class="build-summary-num">{toBuyCount}</span>
           <span class="build-summary-label">to buy</span>

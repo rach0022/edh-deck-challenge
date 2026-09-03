@@ -123,8 +123,10 @@ function buildResponse(
     {
       name: 'High Synergy Cards',
       ownedGroups: typeGroups(owned),
+      consideringGroups: [],
       toBuyGroups: typeGroups(toBuy),
       ownedCount: owned.length,
+      consideringCount: 0,
       toBuyCount: toBuy.length,
       toBuyTotalCad: 40.5,
     },
@@ -139,12 +141,15 @@ function buildResponse(
     },
     sections,
     commanderImages: [
-      { name: 'Atraxa, Praetors Voice', imageUrl: 'https://img/cmd/atraxa', scryfallId: 'atraxa-id' },
-      { name: 'Tymna the Weaver', imageUrl: 'https://img/cmd/tymna', scryfallId: 'tymna-id' },
+      { name: 'Atraxa, Praetors Voice', imageUrl: 'https://img/cmd/atraxa', scryfallId: 'atraxa-id', role: 'commander' },
+      { name: 'Tymna the Weaver', imageUrl: 'https://img/cmd/tymna', scryfallId: 'tymna-id', role: 'partner' },
+      { name: 'Lurrus of the Dream-Den', imageUrl: 'https://img/cmd/lurrus', scryfallId: 'lurrus-id', role: 'companion' },
     ],
     ownedCards: owned,
+    consideringCards: [],
     toBuyCards: toBuy,
     ownedCount: owned.length,
+    consideringCount: 0,
     toBuyCount: toBuy.length,
     buyListTotalCad: 40.5,
     deckCount: 3,
@@ -263,7 +268,7 @@ describe('BuildPage', () => {
       buildResponse({
         selection: { commander: 'Atraxa, Praetors Voice', partner: null, companion: null },
         commanderImages: [
-          { name: 'Atraxa, Praetors Voice', imageUrl: 'https://img/cmd/atraxa', scryfallId: 'atraxa-id' },
+          { name: 'Atraxa, Praetors Voice', imageUrl: 'https://img/cmd/atraxa', scryfallId: 'atraxa-id', role: 'commander' },
         ],
       }),
     );
@@ -298,29 +303,37 @@ describe('BuildPage', () => {
     expect(html).toContain('My Atraxa Deck');
   });
 
-  it('badges owned cards found only on the sideboard / maybeboard', async () => {
-    // A section whose owned card came from the sideboard.
-    const owned = ownedCard({ name: 'Cyclonic Rift', board: 'sideboard', cardType: 'Instant' });
-    const considering = ownedCard({ name: 'Mystic Remora', board: 'maybeboard', cardType: 'Enchantment', scryfallId: 'mr-1' });
+  it('badges considering cards (sideboard / maybeboard) in the collapsible section', async () => {
+    // Two cards the user only has on their sideboard / maybeboard → considering.
+    const sideboard = ownedCard({ name: 'Cyclonic Rift', owned: false, board: 'sideboard', cardType: 'Instant' });
+    const maybeboard = ownedCard({ name: 'Mystic Remora', owned: false, board: 'maybeboard', cardType: 'Enchantment', scryfallId: 'mr-1' });
     const res = await renderBuild(
       buildResponse({
-        ownedCards: [owned, considering],
-        ownedCount: 2,
+        ownedCards: [],
+        consideringCards: [sideboard, maybeboard],
+        ownedCount: 0,
+        consideringCount: 2,
         sections: [
           {
             name: 'High Synergy Cards',
-            ownedGroups: [
-              { type: 'Instant', cards: [owned] },
-              { type: 'Enchantment', cards: [considering] },
+            ownedGroups: [],
+            consideringGroups: [
+              { type: 'Instant', cards: [sideboard] },
+              { type: 'Enchantment', cards: [maybeboard] },
             ],
             toBuyGroups: [],
-            ownedCount: 2,
+            ownedCount: 0,
+            consideringCount: 2,
             toBuyCount: 0,
             toBuyTotalCad: 0,
           },
         ],
       }),
     );
+    // The considering cards render in a collapsible section.
+    expect(res).toContain('build-considering');
+    expect(res).toContain("considering");
+    // With their board badges.
     expect(res).toContain('class="board-badge board-badge-sideboard"');
     expect(res).toContain('>Sideboard<');
     expect(res).toContain('class="board-badge board-badge-maybeboard"');
@@ -332,6 +345,16 @@ describe('BuildPage', () => {
     const res = await renderBuild(buildResponse());
     expect(res).not.toContain('class="board-badge board-badge-sideboard"');
     expect(res).not.toContain('class="board-badge board-badge-maybeboard"');
+  });
+
+  it('labels the companion image at the top of the page like the commander/partner', async () => {
+    const html = await renderBuild(buildResponse());
+    // The companion image is now shown in the header art alongside the roles.
+    expect(html).toContain('https://img/cmd/lurrus');
+    expect(html).toContain('build-commander-companion');
+    expect(html).toContain('>Companion<');
+    expect(html).toContain('>Commander<');
+    expect(html).toContain('>Partner<');
   });
 
   it('renders EDHREC section headers', async () => {

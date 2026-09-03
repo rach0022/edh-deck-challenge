@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   createScryfallService,
+  cheapestPrintingUsd,
   ScryfallUnavailableError,
   type CardSuggestion,
 } from '../src/services/scryfall.js';
@@ -357,6 +358,111 @@ describe('ScryfallService.getCardByName', () => {
     const service = createScryfallService(config, cache);
 
     expect(await service.getCardByName('   ')).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ─── cheapestPrintingUsd (pure reducer) ──────────────────────────────────────
+
+describe('cheapestPrintingUsd', () => {
+  it('returns the minimum non-foil usd across printings', () => {
+    const printings = [
+      { prices: { usd: '5.00', usd_foil: '20.00' } },
+      { prices: { usd: '1.25', usd_foil: '9.99' } },
+      { prices: { usd: '3.00', usd_foil: null } },
+    ];
+    expect(cheapestPrintingUsd(printings as any)).toBe(1.25);
+  });
+
+  it('falls back to usd_foil for a printing with no non-foil price', () => {
+    const printings = [
+      { prices: { usd: null, usd_foil: '2.50' } },
+      { prices: { usd: '4.00', usd_foil: '30.00' } },
+    ];
+    expect(cheapestPrintingUsd(printings as any)).toBe(2.5);
+  });
+
+  it('skips printings with no usable price and returns null when none have a price', () => {
+    const printings = [
+      { prices: { usd: null, usd_foil: null } },
+      { prices: {} },
+      {},
+    ];
+    expect(cheapestPrintingUsd(printings as any)).toBeNull();
+  });
+
+  it('returns null for an empty list', () => {
+    expect(cheapestPrintingUsd([])).toBeNull();
+  });
+});
+
+// ─── getCheapestUsdByName ─────────────────────────────────────────────────────
+
+describe('ScryfallService.getCheapestUsdByName', () => {
+  it('queries prints with the commander-legal filter and returns the cheapest usd', async () => {
+    const cache = createFakeCache();
+    const data = [
+      scryfallCard({ prices: { usd: '5.00', usd_foil: '25.00' } }),
+      scryfallCard({ id: 'card-id-2', prices: { usd: '0.75', usd_foil: '8.00' } }),
+    ];
+    const fetchSpy = stubFetchResolve(mockResponse(200, { object: 'list', data }));
+    const service = createScryfallService(config, cache);
+
+    const usd = await service.getCheapestUsdByName('Sol Ring');
+    expect(usd).toBe(0.75);
+
+    // The request restricts to commander-legal printings and asks for one row
+    // per printing.
+    const url = fetchSpy.mock.calls[0][0] as string;
+    expect(url).toContain('/cards/search?q=');
+    expect(decodeURIComponent(url)).toContain('!"Sol Ring" legal:commander');
+    expect(url).toContain('unique=prints');
+  });
+
+  it('caches the resolved price (including a null "no price" outcome)', async () => {
+    const cache = createFakeCache();
+    stubFetchResolve(mockResponse(200, { object: 'list', data: [scryfallCard({ prices: { usd: '2.00' } })] }));
+    const service = createScryfallService(config, cache);
+
+    await service.getCheapestUsdByName('Sol Ring');
+    // Cached under the cheapest-printing key with the configured TTL.
+    const setCall = cache.sets.find((s) => s.key === 'edh:scryfall:cheapest:sol ring');
+    expect(setCall).toBeDefined();
+    expect(setCall!.value).toEqual({ usd: 2 });
+    expect(setCall!.ttl).toBe(config.cacheTtlSeconds);
+  });
+
+  it('serves a cached price without calling fetch', async () => {
+    const cache = createFakeCache({ 'edh:scryfall:cheapest:sol ring': { usd: 1.11 } });
+    const fetchSpy = stubFetchResolve(mockResponse(200, {}));
+    const service = createScryfallService(config, cache);
+
+    expect(await service.getCheapestUsdByName('Sol Ring')).toBe(1.11);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null (no throw) when the card has no commander-legal printing (404)', async () => {
+    const cache = createFakeCache();
+    stubFetchResolve(mockResponse(404, { object: 'error', code: 'not_found' }));
+    const service = createScryfallService(config, cache);
+
+    expect(await service.getCheapestUsdByName('Not Legal Here')).toBeNull();
+  });
+
+  it('degrades to null (no throw) when Scryfall is unavailable', async () => {
+    const cache = createFakeCache();
+    stubFetchReject(new Error('network down'));
+    const service = createScryfallService(config, cache);
+
+    expect(await service.getCheapestUsdByName('Sol Ring')).toBeNull();
+  });
+
+  it('returns null for empty/whitespace names without calling fetch', async () => {
+    const cache = createFakeCache();
+    const fetchSpy = stubFetchResolve(mockResponse(200, {}));
+    const service = createScryfallService(config, cache);
+
+    expect(await service.getCheapestUsdByName('  ')).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

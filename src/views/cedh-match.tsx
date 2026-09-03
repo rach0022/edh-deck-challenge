@@ -268,8 +268,9 @@ export function CedhMatchPage({ result, cached }: CedhMatchPageProps) {
           )}
         </p>
         <p class="cedh-fx-note">
-          Prices are for the printing used in each reference decklist (via Moxfield),
-          converted at <strong>1 USD ≈ CA${fx.usdToCad.toFixed(4)}</strong>
+          Prices are the cheapest commander-legal printing for each card (via
+          Scryfall), converted at{' '}
+          <strong>1 USD ≈ CA${fx.usdToCad.toFixed(4)}</strong>
           {fx.live
             ? <> (rate as of {fxDate}, cached daily)</>
             : <> (live rate unavailable — using an approximate fallback)</>}.

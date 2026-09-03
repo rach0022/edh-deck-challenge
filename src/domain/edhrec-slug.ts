@@ -21,13 +21,19 @@ import type { CommanderSelection } from '../types.js';
  * only by case, surrounding/internal whitespace, or punctuation
  * (apostrophes, commas, etc.) produce the same slug.
  *
+ * - Double-faced / transform / split names ("A // B") are reduced to their
+ *   FRONT face first — EDHREC keys its commander pages off the front face only
+ *   (e.g. "Liliana, Heretical Healer // Liliana, Defiant Necromancer" →
+ *   "liliana-heretical-healer"). Slugging the full string would 404.
  * - Unicode is normalized (NFKD) and diacritics folded to ASCII.
  * - Everything except letters, digits, and spaces is removed.
  * - Whitespace runs collapse to single hyphens.
  * - Leading/trailing hyphens are trimmed.
  */
 export function commanderSlug(name: string): string {
-  return name
+  // Reduce a double-faced / split name to its front face before slugging.
+  const frontFace = name.split('//')[0];
+  return frontFace
     .normalize('NFKD')
     // strip combining diacritical marks (accents)
     .replace(/[\u0300-\u036f]/g, '')

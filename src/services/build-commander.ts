@@ -46,6 +46,7 @@ import type {
   BuildCommanderCard,
   BuildCommanderResponse,
   CommanderImage,
+  CommanderImageRole,
   CommanderSelection,
 } from '../types.js';
 
@@ -107,17 +108,21 @@ export function createBuildCommanderService(
   async function resolveCommanderImages(
     selection: CommanderSelection,
   ): Promise<CommanderImage[]> {
-    const names = [selection.commander, selection.partner].filter(
-      (n): n is string => typeof n === 'string' && n.trim().length > 0,
-    );
-    if (names.length === 0) return [];
+    // Primary commander, then partner, then companion — each shown at the top
+    // of the page with its role labelled.
+    const entries: { name: string; role: CommanderImageRole }[] = [
+      { name: selection.commander, role: 'commander' as const },
+      { name: selection.partner ?? '', role: 'partner' as const },
+      { name: selection.companion ?? '', role: 'companion' as const },
+    ].filter((e) => typeof e.name === 'string' && e.name.trim().length > 0);
+    if (entries.length === 0) return [];
 
     try {
-      // name -> scryfall id (+ name), in selection order.
+      // name -> scryfall id (+ name/role), in selection order.
       const resolved = await Promise.all(
-        names.map(async (name) => {
-          const card = await scryfall.getCardByName(name);
-          return { name, scryfallId: card?.scryfallId ?? null };
+        entries.map(async (e) => {
+          const card = await scryfall.getCardByName(e.name);
+          return { ...e, scryfallId: card?.scryfallId ?? null };
         }),
       );
 
@@ -133,11 +138,17 @@ export function createBuildCommanderService(
           name: r.name,
           imageUrl: d?.imageUrl ?? null,
           scryfallId: r.scryfallId,
+          role: r.role,
         };
       });
     } catch {
       // Scryfall unavailable — header falls back to text.
-      return names.map((name) => ({ name, imageUrl: null, scryfallId: null }));
+      return entries.map((e) => ({
+        name: e.name,
+        imageUrl: null,
+        scryfallId: null,
+        role: e.role,
+      }));
     }
   }
   /**
@@ -231,11 +242,13 @@ export function createBuildCommanderService(
       progress: 85,
       detail: `${recommendations.length} cards`,
     });
-    const [ownedEnriched, toBuyEnrichedRaw, commanderImages] = await Promise.all([
-      enrichCards(split.ownedCards),
-      enrichCards(split.toBuyCards),
-      resolveCommanderImages(selection),
-    ]);
+    const [ownedEnriched, consideringEnriched, toBuyEnrichedRaw, commanderImages] =
+      await Promise.all([
+        enrichCards(split.ownedCards),
+        enrichCards(split.consideringCards),
+        enrichCards(split.toBuyCards),
+        resolveCommanderImages(selection),
+      ]);
 
     // 5. Price the to-buy cards to CAD using the cached FX rate (Req 8).
     emit({
@@ -246,11 +259,17 @@ export function createBuildCommanderService(
     });
     const fxInfo = await fx.getUsdToCad();
     const ownedCards = ownedEnriched;
+    const consideringCards = consideringEnriched;
     const toBuyCards = priceCards(toBuyEnrichedRaw, fxInfo.usdToCad);
     const buyListTotalCad = computeBuyListTotalCad(toBuyCards);
 
     // 6. Group into EDHREC sections → card-type sub-groups for the page.
-    const sections = buildSections(ownedCards, toBuyCards, sectionOrder);
+    const sections = buildSections(
+      ownedCards,
+      consideringCards,
+      toBuyCards,
+      sectionOrder,
+    );
 
     // 7. Assemble the response (flat lists retained for the summary + tests).
     return {
@@ -259,8 +278,10 @@ export function createBuildCommanderService(
       sections,
       commanderImages,
       ownedCards,
+      consideringCards,
       toBuyCards,
       ownedCount: split.ownedCount,
+      consideringCount: split.consideringCount,
       toBuyCount: split.toBuyCount,
       buyListTotalCad,
       deckCount: index.deckCount,

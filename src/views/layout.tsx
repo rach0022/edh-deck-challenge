@@ -1802,6 +1802,42 @@ const css = `
                 0 0 56px rgba(52, 211, 153, 0.18);
   }
 
+  .build-commander-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+  }
+
+  .build-commander-noimg {
+    width: 220px;
+    max-width: 60vw;
+    aspect-ratio: 5 / 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.75rem;
+    border-radius: 14px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+
+  .build-commander-role {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .build-commander-companion .build-commander-role {
+    color: #f0c040;
+  }
+
   .build-edhrec-rank {
     text-align: center;
     color: var(--text-secondary);
@@ -1997,6 +2033,23 @@ const css = `
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  /* Considering: collapsible image gallery (sideboard / maybeboard) */
+  .build-considering {
+    margin-top: 1.25rem;
+    border-top: 1px dashed var(--glass-border);
+    padding-top: 1rem;
+  }
+
+  .build-considering summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .build-considering summary:hover { color: var(--text-primary); }
 
   /* To-buy: collapsible text list (cEDH decklist style) */
   .build-tobuy {

@@ -78,6 +78,42 @@ describe('Property 5: EDHREC slug building is deterministic and pairs partners',
   /**
    * **Validates: Requirements 5.2**
    *
+   * Double-faced / transform / split names ("A // B") slug from the FRONT face
+   * only — EDHREC keys its pages off the front face, so slugging the whole
+   * string would produce a 404 slug.
+   */
+  it('commanderSlug uses only the front face of a "A // B" name', () => {
+    expect(
+      commanderSlug('Liliana, Heretical Healer // Liliana, Defiant Necromancer'),
+    ).toBe('liliana-heretical-healer');
+
+    // Whitespace around the separator doesn't matter.
+    expect(commanderSlug('Jugan Defends the Temple // Remnant of the Rising Star'))
+      .toBe('jugan-defends-the-temple');
+
+    // A name with no separator is unaffected.
+    expect(commanderSlug('Atraxa, Praetors Voice')).toBe('atraxa-praetors-voice');
+  });
+
+  /**
+   * **Validates: Requirements 5.2**
+   *
+   * A DFC name and its bare front face produce the same slug, so however the
+   * commander name is captured (full "A // B" or just "A"), the EDHREC lookup
+   * targets the same page.
+   */
+  it('commanderSlug of "A // B" equals commanderSlug of the front face alone', () => {
+    fc.assert(
+      fc.property(arbCommanderName, arbCommanderName, (front, back) => {
+        expect(commanderSlug(`${front} // ${back}`)).toBe(commanderSlug(front));
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  /**
+   * **Validates: Requirements 5.2**
+   *
    * The slug alphabet is restricted to lowercase ASCII letters, digits, and
    * hyphens, with no leading/trailing hyphen and no doubled hyphens.
    */

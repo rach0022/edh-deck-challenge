@@ -70,13 +70,21 @@ export interface OwnedCardIndex {
 }
 
 /**
- * The result of partitioning recommendations into owned vs. to-buy.
+ * The result of partitioning recommendations into owned / considering / to-buy.
  * Prices are always null here — see `build-commander-pricing.ts`.
+ *
+ * "Considering" cards are recommendations the user only has on a sideboard or
+ * maybeboard: they aren't counted as truly owned (they may not be in a deck
+ * the user runs), but they're surfaced separately with a board badge rather
+ * than lumped into to-buy.
  */
 export interface OwnedToBuySplit {
   ownedCards: BuildCommanderCard[];
+  /** Recommendations found only on the user's sideboard/maybeboard. */
+  consideringCards: BuildCommanderCard[];
   toBuyCards: BuildCommanderCard[];
   ownedCount: number;
+  consideringCount: number;
   toBuyCount: number;
 }
 
@@ -131,32 +139,45 @@ export function buildOwnedCardIndex(
 }
 
 /**
- * Partitions EDHREC recommendations into Owned and To-Buy groups.
+ * Partitions EDHREC recommendations into Owned, Considering, and To-Buy groups.
  *
- * A recommendation is Owned iff its normalized name is in `index.ownedSet`
- * (Req 6.3, 6.4). Owned cards attach their Source_Decks from the index,
- * sorted for deterministic output (Req 10.1, 10.3); to-buy cards carry an
- * empty `sourceDecks`. Prices are left null for the pricing layer. The two
- * groups form a total, disjoint partition of the recommendations, so
- * `ownedCount + toBuyCount === recommendations.length` (Req 7.2, 12.5).
+ * A recommendation counts as **Owned** only when the user has it on a deck's
+ * mainboard (a card they actively run — definitely owned). A recommendation the
+ * user only has on a sideboard/maybeboard is **Considering**: it's still in the
+ * owned set but isn't a card they're known to run, so it's surfaced separately
+ * with a board badge instead of being counted as owned or dumped into to-buy.
+ * Everything the user doesn't have at all is **To-Buy** (Req 6.3, 6.4).
+ *
+ * Owned/considering cards attach their Source_Decks from the index, sorted for
+ * deterministic output (Req 10.1, 10.3); to-buy cards carry an empty
+ * `sourceDecks`. Prices are left null for the pricing layer. The three groups
+ * form a total, disjoint partition of the recommendations, so
+ * `ownedCount + consideringCount + toBuyCount === recommendations.length`
+ * (Req 7.2, 12.5).
  */
 export function partitionRecommendations(
   recommendations: readonly EdhrecRecommendation[],
   index: OwnedCardIndex,
 ): OwnedToBuySplit {
   const ownedCards: BuildCommanderCard[] = [];
+  const consideringCards: BuildCommanderCard[] = [];
   const toBuyCards: BuildCommanderCard[] = [];
 
   for (const rec of recommendations) {
     const normalized = normalizeCardName(rec.name);
-    const owned = index.ownedSet.has(normalized);
+    const inCollection = index.ownedSet.has(normalized);
+    const board = inCollection ? index.board.get(normalized) ?? null : null;
+    // Only a mainboard match counts as owned; sideboard/maybeboard is
+    // "considering". A card the user doesn't have at all is to-buy.
+    const owned = board === 'mainboard';
+    const considering = inCollection && !owned;
 
     const card: BuildCommanderCard = {
       name: rec.name,
       category: rec.category,
       owned,
-      board: owned ? index.board.get(normalized) ?? null : null,
-      sourceDecks: owned
+      board,
+      sourceDecks: inCollection
         ? [...(index.sourceDecks.get(normalized) ?? [])].sort((a, b) =>
             a.localeCompare(b),
           )
@@ -172,13 +193,16 @@ export function partitionRecommendations(
     };
 
     if (owned) ownedCards.push(card);
+    else if (considering) consideringCards.push(card);
     else toBuyCards.push(card);
   }
 
   return {
     ownedCards,
+    consideringCards,
     toBuyCards,
     ownedCount: ownedCards.length,
+    consideringCount: consideringCards.length,
     toBuyCount: toBuyCards.length,
   };
 }

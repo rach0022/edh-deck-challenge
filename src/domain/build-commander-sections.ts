@@ -67,10 +67,12 @@ function groupByType(cards: BuildCommanderCard[]): BuildTypeGroup[] {
  */
 export function buildSections(
   ownedCards: readonly BuildCommanderCard[],
+  consideringCards: readonly BuildCommanderCard[],
   toBuyCards: readonly BuildCommanderCard[],
   sectionOrder: readonly string[],
 ): BuildSection[] {
   const ownedBySection = new Map<string, BuildCommanderCard[]>();
+  const consideringBySection = new Map<string, BuildCommanderCard[]>();
   const toBuyBySection = new Map<string, BuildCommanderCard[]>();
   const seen: string[] = [];
 
@@ -86,14 +88,19 @@ export function buildSections(
   };
 
   for (const card of ownedCards) record(ownedBySection, card);
+  for (const card of consideringCards) record(consideringBySection, card);
   for (const card of toBuyCards) record(toBuyBySection, card);
 
   // Section iteration order: the provided EDHREC order first, then any extra
   // sections in first-seen order.
   const orderedSections: string[] = [];
   for (const name of sectionOrder) {
-    if ((ownedBySection.has(name) || toBuyBySection.has(name)) &&
-        !orderedSections.includes(name)) {
+    if (
+      (ownedBySection.has(name) ||
+        consideringBySection.has(name) ||
+        toBuyBySection.has(name)) &&
+      !orderedSections.includes(name)
+    ) {
       orderedSections.push(name);
     }
   }
@@ -104,8 +111,11 @@ export function buildSections(
   const sections: BuildSection[] = [];
   for (const name of orderedSections) {
     const owned = ownedBySection.get(name) ?? [];
+    const considering = consideringBySection.get(name) ?? [];
     const toBuy = toBuyBySection.get(name) ?? [];
-    if (owned.length === 0 && toBuy.length === 0) continue;
+    if (owned.length === 0 && considering.length === 0 && toBuy.length === 0) {
+      continue;
+    }
 
     const toBuyTotalCad = roundMoney(
       toBuy.reduce((sum, card) => sum + (card.cad ?? 0), 0),
@@ -114,8 +124,10 @@ export function buildSections(
     sections.push({
       name,
       ownedGroups: groupByType(owned),
+      consideringGroups: groupByType(considering),
       toBuyGroups: groupByType(toBuy),
       ownedCount: owned.length,
+      consideringCount: considering.length,
       toBuyCount: toBuy.length,
       toBuyTotalCad,
     });
