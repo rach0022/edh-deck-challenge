@@ -47,6 +47,7 @@ import type {
 const stubChallenge = {} as any;
 const stubCedh = {} as any;
 const stubScryfall = {} as any;
+const stubDeckAnalysis = {} as any;
 
 /** Builds a minimal, valid BuildCommanderResponse for success-path tests. */
 function buildResponse(
@@ -111,7 +112,7 @@ function createFakeBuildService(options: {
 
 /** Wires a page-routes app around the given build service (others are stubs). */
 function appWith(buildService: BuildCommanderService) {
-  return createPageRoutes(stubChallenge, stubCedh, stubScryfall, buildService);
+  return createPageRoutes(stubChallenge, stubCedh, stubScryfall, buildService, stubDeckAnalysis);
 }
 
 const selection: CommanderSelection = {

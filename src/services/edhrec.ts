@@ -25,6 +25,8 @@ import {
   parseCommanderRank,
   parseEdhrecRecommendations,
   parseRecommendationsForSelection,
+  parseSaltEntries,
+  type SaltEntry,
 } from '../domain/edhrec-parser.js';
 import { selectionKey } from '../domain/selection-key.js';
 
@@ -57,10 +59,27 @@ export interface EdhrecResult {
 
 export interface EdhrecService {
   getRecommendations(selection: CommanderSelection): Promise<EdhrecResult>;
+  /**
+   * Returns EDHREC's global salt scores as a list of `{ name, scryfallId, salt }`,
+   * covering the saltiest cards (the top several hundred). Cached globally since
+   * the dataset is commander-independent and changes slowly. A fetch failure
+   * degrades to an empty list rather than throwing.
+   */
+  getSaltScores(): Promise<SaltEntry[]>;
 }
 
 /** Cache-key prefix for EDHREC recommendation lookups. */
 const EDHREC_CACHE_PREFIX = 'edh:edhrec:';
+
+/** Cache key for the global EDHREC salt dataset. */
+const EDHREC_SALT_CACHE_KEY = 'edh:edhrec:salt';
+
+/**
+ * How many salt pages to fetch (100 cards each). The saltiest ~300 cards cover
+ * essentially every card players consider "salty"; the long tail is salt < ~1.5
+ * and not worth extra requests.
+ */
+const SALT_PAGES = 3;
 
 export function createEdhrecService(
   config: AppConfig,
@@ -173,5 +192,43 @@ export function createEdhrecService(
     return result;
   }
 
-  return { getRecommendations };
+  /**
+   * Fetches EDHREC's global salt dataset (the saltiest ~SALT_PAGES*100 cards).
+   * The salt pages live at `/pages/top/salt.json` and `/pages/top/salt--N.json`
+   * (N starting at 1 for the second page). Results are merged and cached under
+   * a single global key. Any page that 404s or fails to fetch is skipped, and a
+   * total failure degrades to an empty list.
+   */
+  async function getSaltScores(): Promise<SaltEntry[]> {
+    const cached = await cache.get<SaltEntry[]>(EDHREC_SALT_CACHE_KEY);
+    if (cached) return cached;
+
+    const entries: SaltEntry[] = [];
+    const seen = new Set<string>();
+    for (let page = 0; page < SALT_PAGES; page++) {
+      // First page is salt.json; subsequent pages are salt--1.json, salt--2.json…
+      const path = page === 0 ? 'salt' : `salt--${page}`;
+      const url = `${config.edhrecBaseUrl}/pages/top/${path}.json`;
+      try {
+        const { status, body } = await fetchJson(url);
+        if (status < 200 || status >= 300) break; // no more pages / unavailable
+        for (const entry of parseSaltEntries(body)) {
+          const key = entry.name.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          entries.push(entry);
+        }
+      } catch {
+        // Best-effort: stop paginating on the first failure, keep what we have.
+        break;
+      }
+    }
+
+    // Cache even an empty result (short-lived) so a transient EDHREC outage
+    // doesn't hammer the endpoint on every analysis.
+    await cache.set(EDHREC_SALT_CACHE_KEY, entries, config.cacheTtlSeconds);
+    return entries;
+  }
+
+  return { getRecommendations, getSaltScores };
 }

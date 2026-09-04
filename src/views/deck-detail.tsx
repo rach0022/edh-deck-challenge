@@ -147,13 +147,11 @@ function CombosSection({ combos }: { combos: SpellbookCombo[] }) {
   if (combos.length === 0) return null;
 
   return (
-    <div class="combos-section" id="section-combos">
-      <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
-        ♾️ Combos Found
-        <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem;">
-          ({combos.length})
-        </span>
-      </h2>
+    <details class="combos-section collapsible-section" id="section-combos" open>
+      <summary class="collapsible-summary">
+        <span class="collapsible-title">♾️ Combos Found</span>
+        <span class="collapsible-count">({combos.length})</span>
+      </summary>
       <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
         Combos detected via <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a>
       </p>
@@ -162,7 +160,7 @@ function CombosSection({ combos }: { combos: SpellbookCombo[] }) {
           <ComboCard combo={combo} />
         ))}
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -203,13 +201,13 @@ function PotentialCardsSection({ cards }: { cards: PotentialComboCard[] }) {
   const totalCombos = cards.reduce((sum, c) => sum + c.comboCount, 0);
 
   return (
-    <div class="potential-section" id="section-potential-combos">
-      <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
-        🧩 Potential Combos
-        <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem;">
+    <details class="potential-section collapsible-section" id="section-potential-combos" open>
+      <summary class="collapsible-summary">
+        <span class="collapsible-title">🧩 Potential Combos</span>
+        <span class="collapsible-count">
           ({totalCombos} combos from {cards.length} card{cards.length > 1 ? 's' : ''})
         </span>
-      </h2>
+      </summary>
       <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
         Add one of these cards to unlock new combos within your color identity
       </p>
@@ -218,7 +216,7 @@ function PotentialCardsSection({ cards }: { cards: PotentialComboCard[] }) {
           <PotentialCardRow card={card} />
         ))}
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -285,6 +283,10 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
           <a href={deck.moxfieldUrl} target="_blank" rel="noopener">
             View on Moxfield ↗
           </a>
+          {' • '}
+          <a href={`/analyze/${encodeURIComponent(deck.id)}`}>
+            🧪 Analyze deck
+          </a>
           {cached && <span style="margin-left: 1rem; color: var(--text-muted); font-size: 0.8rem;">(cached)</span>}
         </div>
       </div>
@@ -323,16 +325,17 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
           )}
 
           {hasDecklist && (
-            <div class="decklist-section" id="section-decklist">
-              <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
-                Decklist
-              </h2>
+            <details class="decklist-section collapsible-section" id="section-decklist" open>
+              <summary class="collapsible-summary">
+                <span class="collapsible-title">Decklist</span>
+                <span class="collapsible-count">({deck.cardCount} cards)</span>
+              </summary>
               <div class="decklist-grid">
                 {deck.cardsByType.map((group) => (
                   <CardTypeSection group={group} />
                 ))}
               </div>
-            </div>
+            </details>
           )}
         </div>
       </div>

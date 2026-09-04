@@ -678,3 +678,107 @@ export interface BuildCommanderResponse {
   /** How many EDHREC decks run this commander, or null. */
   edhrecNumDecks: number | null;
 }
+
+
+// ─── Deck Analysis (salt / power / bracket + cut/upgrade suggestions) ─────────
+
+/**
+ * A single card in a deck annotated with the EDHREC signals used by the
+ * analysis features: its saltiness (global EDHREC salt score), and — when the
+ * card appears in the commander's EDHREC recommendation set — its inclusion
+ * rate and synergy for that commander.
+ */
+export interface AnalyzedCard {
+  name: string;
+  scryfallId: string | null;
+  /** Canonical card type (Creature/Land/…); used for filtering/grouping. */
+  type: string;
+  /** Global EDHREC salt score (~0–3+), or null when the card isn't salty/known. */
+  salt: number | null;
+  /** EDHREC inclusion rate (0..1) for this commander, or null when not a rec. */
+  inclusion: number | null;
+  /** EDHREC synergy score for this commander, or null when not a rec. */
+  synergy: number | null;
+  /** True when the card appears anywhere in the commander's EDHREC recs. */
+  isRecommended: boolean;
+}
+
+/** A card flagged as a potential cut, with the reason it was flagged. */
+export interface CutCandidate {
+  name: string;
+  scryfallId: string | null;
+  type: string;
+  inclusion: number | null;
+  synergy: number | null;
+  /** Short human-readable reason (e.g. "not an EDHREC pick for this commander"). */
+  reason: string;
+}
+
+/** A high-synergy EDHREC card the deck is missing, suggested as an add. */
+export interface AddSuggestion {
+  name: string;
+  scryfallId: string | null;
+  /** EDHREC category/panel the card came from (e.g. "High Synergy Cards"). */
+  category: string;
+  inclusion: number | null;
+  synergy: number | null;
+}
+
+/** A salty card present in the deck, for the salt breakdown. */
+export interface SaltyCard {
+  name: string;
+  scryfallId: string | null;
+  salt: number;
+}
+
+/**
+ * The salt / power-level portion of a deck analysis. All figures are ESTIMATES
+ * derived from EDHREC's aggregate data, not authoritative power ratings.
+ */
+export interface DeckSaltAnalysis {
+  /** Number of the deck's cards that have a known EDHREC salt score. */
+  saltyCardCount: number;
+  /** Sum of salt across the deck's known-salty cards. */
+  totalSalt: number;
+  /** Average salt across the deck's known-salty cards (0 when none). */
+  averageSalt: number;
+  /** The deck's saltiest cards (desc), capped for display. */
+  topSaltyCards: SaltyCard[];
+  /**
+   * Count of "Game Changer" cards (EDHREC's Game Changers panel) present in the
+   * deck — a signal used in the bracket estimate.
+   */
+  gameChangerCount: number;
+  /** Names of the Game Changer cards present, for display. */
+  gameChangers: string[];
+  /**
+   * Estimated Commander bracket (1–5). Heuristic only — clearly labelled as an
+   * estimate in the UI.
+   */
+  estimatedBracket: number;
+  /** Short bullet rationale lines explaining the bracket estimate. */
+  bracketRationale: string[];
+}
+
+/** Full response for the deck analysis page (`GET /analyze/:deckId`). */
+export interface DeckAnalysisResponse {
+  deckId: string;
+  deckName: string;
+  moxfieldUrl: string;
+  commanders: CommanderImage[];
+  colorIdentity: Color[];
+  /** The commander's EDHREC popularity rank (1 = most played), or null. */
+  edhrecRank: number | null;
+  /** How many EDHREC decks run this commander, or null. */
+  edhrecNumDecks: number | null;
+  /** Total non-land, non-commander cards considered for suggestions. */
+  analyzedCardCount: number;
+  /** Salt / power / bracket estimate (Feature #4). */
+  salt: DeckSaltAnalysis;
+  /** Cards the deck runs that aren't EDHREC picks — potential cuts (Feature #2). */
+  cutCandidates: CutCandidate[];
+  /** High-synergy EDHREC cards the deck is missing — suggested adds (Feature #2). */
+  addSuggestions: AddSuggestion[];
+  /** True when EDHREC had no data for this commander (analysis degraded). */
+  noEdhrecData: boolean;
+}

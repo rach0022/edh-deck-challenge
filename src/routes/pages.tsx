@@ -18,6 +18,7 @@ import type { CedhService } from '../services/cedh.js';
 import type { ScryfallService } from '../services/scryfall.js';
 import { ScryfallUnavailableError } from '../services/scryfall.js';
 import type { BuildCommanderService } from '../services/build-commander.js';
+import type { DeckAnalysisService } from '../services/deck-analysis.js';
 import {
   EdhrecNotFoundError,
   EdhrecTimeoutError,
@@ -27,6 +28,7 @@ import { ChallengePage } from '../views/challenge.js';
 import { CedhMatchPage } from '../views/cedh-match.js';
 import { BuildPage } from '../views/build.js';
 import { DeckDetailPage } from '../views/deck-detail.js';
+import { DeckAnalysisPage } from '../views/deck-analysis.js';
 import { LoadingPage } from '../views/loading.js';
 import { ErrorPage } from '../views/error.js';
 import {
@@ -44,6 +46,7 @@ export function createPageRoutes(
   cedhService: CedhService,
   scryfallService: ScryfallService,
   buildCommanderService: BuildCommanderService,
+  deckAnalysisService: DeckAnalysisService,
 ): Hono {
   const app = new Hono();
 
@@ -231,6 +234,69 @@ export function createPageRoutes(
         500
       );
     }
+  });
+
+  /**
+   * GET /analyze/:deckId — Deck analysis page (salt/power/bracket + cut/add
+   * suggestions). Reuses the same error taxonomy as the other EDHREC-backed
+   * pages; EDHREC "no page for this commander" is NOT fatal (the service
+   * degrades to salt-only with noEdhrecData), so it renders normally.
+   */
+  app.get('/analyze/:deckId', async (c) => {
+    const deckId = c.req.param('deckId').trim();
+
+    if (!deckId) {
+      return c.html(
+        <ErrorPage title="Invalid Deck" message="Deck ID is required." />,
+        400,
+      );
+    }
+
+    try {
+      const { data, cached } = await deckAnalysisService.getAnalysis(deckId);
+      return c.html(<DeckAnalysisPage result={data} cached={cached} />);
+    } catch (error) {
+      if (error instanceof MoxfieldUserNotFoundError) {
+        return c.html(
+          <ErrorPage title="Deck Not Found" message="This deck could not be found." />,
+          404,
+        );
+      }
+      if (error instanceof MoxfieldTimeoutError) {
+        return c.html(
+          <ErrorPage
+            title="Connection Timeout"
+            message="Could not reach Moxfield. The service may be temporarily unavailable. Please try again in a few minutes."
+          />,
+          504,
+        );
+      }
+      console.error('Deck analysis error:', error);
+      return c.html(
+        <ErrorPage
+          title="Something Went Wrong"
+          message="An unexpected error occurred analysing this deck."
+        />,
+        500,
+      );
+    }
+  });
+
+  /**
+   * POST /analyze/refresh/:deckId — Force-refresh the deck analysis, redirect
+   * back to the analysis page.
+   */
+  app.post('/analyze/refresh/:deckId', async (c) => {
+    const deckId = c.req.param('deckId').trim();
+    if (!deckId) {
+      return c.redirect('/');
+    }
+    try {
+      await deckAnalysisService.refreshAnalysis(deckId);
+    } catch (error) {
+      console.error('Deck analysis refresh error:', error);
+    }
+    return c.redirect(`/analyze/${encodeURIComponent(deckId)}`);
   });
 
   /**

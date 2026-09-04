@@ -178,6 +178,46 @@ export function parseEdhrecRecommendations(payload: unknown): EdhrecRecommendati
   return recommendations;
 }
 
+/** A single card's global EDHREC salt score. */
+export interface SaltEntry {
+  name: string;
+  scryfallId: string | null;
+  salt: number;
+}
+
+/**
+ * Parses an EDHREC "Top Saltiest Cards" payload (`/pages/top/salt.json` and its
+ * `salt--N.json` continuations) into a flat list of `{ name, scryfallId, salt }`.
+ *
+ * The salt pages reuse the same `container.json_dict.cardlists[].cardviews[]`
+ * shape as commander pages, but each cardview additionally carries a numeric
+ * `salt`. Cardviews without a usable name or a finite salt are skipped. A
+ * malformed payload yields an empty array rather than throwing.
+ */
+export function parseSaltEntries(payload: unknown): SaltEntry[] {
+  const cardlists = findCardlists(payload);
+  const entries: SaltEntry[] = [];
+
+  for (const panel of cardlists) {
+    if (!isRecord(panel)) continue;
+    const cardviews = panel.cardviews;
+    if (!Array.isArray(cardviews)) continue;
+
+    for (const cardview of cardviews) {
+      if (!isRecord(cardview)) continue;
+      const name = typeof cardview.name === 'string' ? cardview.name.trim() : '';
+      if (!name) continue;
+      const salt = finiteOrNull(cardview.salt);
+      if (salt === null) continue;
+      const scryfallId =
+        typeof cardview.id === 'string' && cardview.id ? cardview.id : null;
+      entries.push({ name, scryfallId, salt });
+    }
+  }
+
+  return entries;
+}
+
 /**
  * Applies the companion constraint (Req 5.3) to a recommendation set.
  *

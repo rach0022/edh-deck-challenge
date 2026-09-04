@@ -32,6 +32,7 @@ import { createFxService } from './services/fx.js';
 import { createScryfallService } from './services/scryfall.js';
 import { createEdhrecService } from './services/edhrec.js';
 import { createBuildCommanderService } from './services/build-commander.js';
+import { createDeckAnalysisService } from './services/deck-analysis.js';
 import { createChallengeRoutes } from './routes/challenge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createPageRoutes } from './routes/pages.js';
@@ -56,6 +57,12 @@ const buildCommanderService = createBuildCommanderService(
   edhrecService,
   fxService,
   scryfallService,
+);
+const deckAnalysisService = createDeckAnalysisService(
+  config,
+  cache,
+  moxfield,
+  edhrecService,
 );
 
 // ─── Create Hono app ────────────────────────────────────────────────────────
@@ -93,7 +100,7 @@ app.get('/favicon.ico', (c) => {
 
 app.route(
   '/',
-  createPageRoutes(challengeService, cedhService, scryfallService, buildCommanderService),
+  createPageRoutes(challengeService, cedhService, scryfallService, buildCommanderService, deckAnalysisService),
 );
 
 // 404 fallback

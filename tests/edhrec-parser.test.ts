@@ -4,6 +4,7 @@ import {
   parseCommanderRank,
   applyCompanionConstraint,
   parseRecommendationsForSelection,
+  parseSaltEntries,
 } from '../src/domain/edhrec-parser.js';
 import type { CommanderSelection, EdhrecRecommendation } from '../src/types.js';
 
@@ -429,5 +430,47 @@ describe('parseCommanderRank', () => {
       container: { json_dict: { card: { rank: 'high', num_decks: null } } },
     };
     expect(parseCommanderRank(payload)).toEqual({ rank: null, numDecks: null });
+  });
+});
+
+
+// ─── parseSaltEntries ────────────────────────────────────────────────────────
+
+describe('parseSaltEntries', () => {
+  /** A slice of EDHREC's /pages/top/salt.json shape. */
+  function saltPayload() {
+    return {
+      container: {
+        json_dict: {
+          cardlists: [
+            {
+              header: '',
+              tag: '',
+              cardviews: [
+                { id: 'stasis-id', name: 'Stasis', salt: 3.0572 },
+                { id: 'orb-id', name: 'Winter Orb', salt: 2.9618 },
+                { id: 'bad', name: '   ', salt: 2.5 }, // blank name → skipped
+                { id: 'nosalt', name: 'No Salt Field' }, // missing salt → skipped
+                { id: 'strsalt', name: 'String Salt', salt: 'nope' }, // non-finite → skipped
+              ],
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  it('parses name/scryfallId/salt from salt cardviews', () => {
+    const entries = parseSaltEntries(saltPayload());
+    expect(entries).toEqual([
+      { name: 'Stasis', scryfallId: 'stasis-id', salt: 3.0572 },
+      { name: 'Winter Orb', scryfallId: 'orb-id', salt: 2.9618 },
+    ]);
+  });
+
+  it('returns [] for a malformed payload', () => {
+    expect(parseSaltEntries(null)).toEqual([]);
+    expect(parseSaltEntries({})).toEqual([]);
+    expect(parseSaltEntries({ container: { json_dict: { cardlists: 'nope' } } })).toEqual([]);
   });
 });

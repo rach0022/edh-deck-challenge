@@ -804,6 +804,44 @@ const css = `
 
   /* ─── Decklist ──────────────────────────── */
 
+  /* Collapsible section wrapper (combos / potential combos / decklist).
+     The <details> keeps each section's existing top border + spacing; the
+     <summary> replaces the old <h2> heading and adds a disclosure caret. */
+  .collapsible-section { margin-top: 2.5rem; }
+  .collapsible-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    color: #ccc;
+    font-size: 1.5rem;
+    font-weight: 800;
+    user-select: none;
+  }
+  /* Hide the native disclosure triangle; we render our own caret. */
+  .collapsible-summary::-webkit-details-marker { display: none; }
+  .collapsible-summary::marker { content: ''; }
+  .collapsible-summary::before {
+    content: '▸';
+    display: inline-block;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    transition: transform 0.15s ease;
+    transform: translateY(-2px);
+  }
+  .collapsible-section[open] > .collapsible-summary::before {
+    transform: translateY(-2px) rotate(90deg);
+  }
+  .collapsible-summary:hover { color: #fff; }
+  .collapsible-title { flex: 0 0 auto; }
+  .collapsible-count {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
   .decklist-section {
     border-top: 1px solid var(--glass-border);
     padding-top: 3rem;
@@ -1779,6 +1817,51 @@ const css = `
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
   }
+
+  /* ─── Deck Analysis page ─────────────────── */
+
+  .analyze-estimate-note {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin: 0.25rem 0 1rem;
+  }
+  .analyze-rationale {
+    margin: 0 0 1rem;
+    padding-left: 1.2rem;
+    color: var(--text-secondary, #cbd5e1);
+    font-size: 0.9rem;
+  }
+  .analyze-rationale li { margin: 0.2rem 0; }
+  .analyze-subblock { margin-top: 1.25rem; }
+  .analyze-inline-list { color: var(--text-secondary, #cbd5e1); font-size: 0.9rem; }
+  .analyze-list { list-style: none; margin: 0.5rem 0 0; padding: 0; }
+  .analyze-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 0.92rem;
+  }
+  .analyze-row:last-child { border-bottom: none; }
+  .analyze-row-name { min-width: 0; }
+  .analyze-card-link { color: inherit; text-decoration: none; }
+  .analyze-card-link:hover { text-decoration: underline; color: #fff; }
+  .analyze-row-tag {
+    margin-left: 0.5rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+  .analyze-row-metric {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-green, #34d399);
+    font-size: 0.85rem;
+  }
+  .analyze-row-muted { color: var(--text-muted); }
 
   /* ─── Build a Commander results page ─────── */
 
