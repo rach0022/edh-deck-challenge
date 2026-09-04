@@ -71,6 +71,8 @@ export interface CardSuggestion {
   scryfallId: string | null;
   /** Cheapest known USD price for the printing, or null if unavailable. */
   usd: number | null;
+  /** WUBRG color-identity letters for the card (empty when colorless/unknown). */
+  colorIdentity: string[];
 }
 
 /**
@@ -121,6 +123,7 @@ interface ScryfallCard {
   type_line?: string;
   set?: string;
   collector_number?: string;
+  color_identity?: string[];
   image_uris?: {
     small?: string;
     normal?: string;
@@ -212,6 +215,7 @@ function toSuggestion(card: ScryfallCard): CardSuggestion {
     collectorNumber: card.collector_number ?? '',
     scryfallId: card.id ?? null,
     usd: coercePrice(card.prices?.usd) ?? coercePrice(card.prices?.usd_foil),
+    colorIdentity: Array.isArray(card.color_identity) ? card.color_identity : [],
   };
 }
 

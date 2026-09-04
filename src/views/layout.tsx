@@ -1782,6 +1782,17 @@ const css = `
 
   /* ─── Build a Commander results page ─────── */
 
+  .build-color-identity {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+  }
+  .build-color-identity img {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  }
+
   .build-commander-art {
     display: flex;
     justify-content: center;

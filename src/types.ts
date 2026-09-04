@@ -644,6 +644,12 @@ export interface BuildCommanderResponse {
    * (with a null image) so the role/name always shows.
    */
   commanderImages: CommanderImage[];
+  /**
+   * The combined WUBRG color identity of the selected commander(s) + companion,
+   * in WUBRG order (empty for a colorless selection). Drives the mana-symbol
+   * row shown above the page title.
+   */
+  colorIdentity: Color[];
   /** Flat list of owned recommendations (across all sections, de-duplicated). */
   ownedCards: BuildCommanderCard[];
   /**

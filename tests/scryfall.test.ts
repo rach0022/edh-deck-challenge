@@ -85,6 +85,7 @@ function scryfallCard(overrides: Record<string, unknown> = {}) {
     name: 'Sol Ring',
     set: 'lea',
     collector_number: '270',
+    color_identity: [],
     image_uris: {
       small: 'https://img/small.jpg',
       normal: 'https://img/normal.jpg',
@@ -124,6 +125,7 @@ describe('ScryfallService.searchCommanders', () => {
         collectorNumber: '270',
         scryfallId: 'card-id-1',
         usd: 1.5,
+        colorIdentity: [],
       },
     ];
     const cache = createFakeCache({ 'edh:scryfall:commander:sol': cached });
@@ -155,6 +157,7 @@ describe('ScryfallService.searchCommanders', () => {
         collectorNumber: '270',
         scryfallId: 'card-id-1',
         usd: 1.5,
+        colorIdentity: [],
       },
     ]);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -287,6 +290,7 @@ describe('ScryfallService.getCardByName', () => {
       collectorNumber: '270',
       scryfallId: 'card-id-1',
       usd: 1.5,
+      colorIdentity: [],
     });
     // Exact-name endpoint queried and cached under the named key.
     const url = fetchSpy.mock.calls[0][0] as string;
@@ -306,6 +310,7 @@ describe('ScryfallService.getCardByName', () => {
       collectorNumber: '270',
       scryfallId: 'card-id-1',
       usd: 1.5,
+      colorIdentity: [],
     };
     const cache = createFakeCache({ 'edh:scryfall:named:sol ring': cached });
     const fetchSpy = stubFetchResolve(mockResponse(200, {}));

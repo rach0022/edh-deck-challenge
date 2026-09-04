@@ -148,6 +148,7 @@ function buildResponse(
       { name: 'Tymna the Weaver', imageUrl: 'https://img/cmd/tymna', scryfallId: 'tymna-id', role: 'partner' },
       { name: 'Lurrus of the Dream-Den', imageUrl: 'https://img/cmd/lurrus', scryfallId: 'lurrus-id', role: 'companion' },
     ],
+    colorIdentity: ['W', 'U', 'B', 'G'],
     ownedCards: owned,
     consideringCards: [],
     toBuyCards: toBuy,
@@ -245,6 +246,20 @@ describe('BuildPage', () => {
     expect(html).toContain('https://img/cmd/tymna');
     // Images link to Scryfall.
     expect(html).toContain('scryfall.com/card/atraxa-id');
+  });
+
+  it('renders the color-identity mana symbols above the title', async () => {
+    const html = await renderBuild(buildResponse());
+    // The WUBRG identity (['W','U','B','G'] in the fixture) renders as
+    // Scryfall symbol SVGs inside the color-identity row.
+    expect(html).toContain('class="build-color-identity"');
+    expect(html).toContain('https://svgs.scryfall.io/card-symbols/W.svg');
+    expect(html).toContain('https://svgs.scryfall.io/card-symbols/G.svg');
+  });
+
+  it('omits the color-identity row for a colorless selection', async () => {
+    const html = await renderBuild(buildResponse({ colorIdentity: [] }));
+    expect(html).not.toContain('class="build-color-identity"');
   });
 
   it('renders the EDHREC commander rank line', async () => {

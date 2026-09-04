@@ -183,6 +183,7 @@ function createFakeScryfall(
     collectorNumber: '',
     scryfallId: `${name}-id`,
     usd: null,
+    colorIdentity: [],
   }));
   return { searchCommanders, searchCompanions, getCardByName, getCardsByIds } as any;
 }
@@ -253,6 +254,7 @@ describe('BuildCommanderService.getResult — cache hit', () => {
       selection,
       sections: [],
       commanderImages: [],
+      colorIdentity: [],
       ownedCards: [],
       toBuyCards: [],
       ownedCount: 0,

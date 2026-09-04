@@ -55,8 +55,10 @@ function buildResponse(
   return {
     username: 'testuser',
     selection: { commander: 'Atraxa, Praetors Voice', partner: null, companion: null },
+    myDeck: null,
     sections: [],
     commanderImages: [],
+    colorIdentity: [],
     ownedCards: [],
     consideringCards: [],
     toBuyCards: [],

@@ -44,6 +44,7 @@ import {
   type UserDeckForMatch,
 } from '../domain/build-commander-mydeck.js';
 import { extractCommanders } from '../domain/commander-extractor.js';
+import { resolveColorIdentity } from '../domain/color-identity.js';
 import { normalizeCardName } from '../domain/deck-similarity.js';
 import { computeBuyListTotalCad, priceCards } from '../domain/build-commander-pricing.js';
 import { buildSections } from '../domain/build-commander-sections.js';
@@ -52,6 +53,7 @@ import { classifyCardType } from '../domain/card-type.js';
 import type {
   BuildCommanderCard,
   BuildCommanderResponse,
+  Color,
   CommanderImage,
   CommanderImageRole,
   CommanderSelection,
@@ -119,11 +121,13 @@ export function createBuildCommanderService(  config: AppConfig,
   }
 
   /**
-   * Resolves the selected commander (and partner) to full card images for the
-   * page header. Each name is looked up by exact name (giving its Scryfall id),
-   * then a single batch fetch pulls the full "normal" card image. Names that
-   * can't be resolved are omitted rather than failing the build — the header
-   * simply falls back to text. A Scryfall outage degrades to no images.
+   * Resolves the selected commander (and partner/companion) to full card images
+   * for the page header, plus the combined color identity of the selection.
+   * Each name is looked up by exact name (giving its Scryfall id + color
+   * identity), then a single batch fetch pulls the full "normal" card image.
+   * Names that can't be resolved are omitted rather than failing the build —
+   * the header simply falls back to text. A Scryfall outage degrades to no
+   * images and an empty color identity.
    */
   async function resolveCommanderImages(
     selection: CommanderSelection,
@@ -133,7 +137,7 @@ export function createBuildCommanderService(  config: AppConfig,
       setCode?: string;
       collectorNumber?: string;
     }[],
-  ): Promise<CommanderImage[]> {
+  ): Promise<{ images: CommanderImage[]; colorIdentity: Color[] }> {
     // Primary commander, then partner, then companion — each shown at the top
     // of the page with its role labelled.
     const entries: { name: string; role: CommanderImageRole }[] = [
@@ -141,7 +145,7 @@ export function createBuildCommanderService(  config: AppConfig,
       { name: selection.partner ?? '', role: 'partner' as const },
       { name: selection.companion ?? '', role: 'companion' as const },
     ].filter((e) => typeof e.name === 'string' && e.name.trim().length > 0);
-    if (entries.length === 0) return [];
+    if (entries.length === 0) return { images: [], colorIdentity: [] };
 
     // When the user has a deck for this commander, prefer the exact printing
     // image they run (Feature 2a) over a generic Scryfall lookup. Keyed by
@@ -157,12 +161,21 @@ export function createBuildCommanderService(  config: AppConfig,
     }
 
     try {
-      // name -> scryfall id (+ name/role), in selection order.
+      // name -> scryfall id + color identity (+ name/role), in selection order.
       const resolved = await Promise.all(
         entries.map(async (e) => {
           const card = await scryfall.getCardByName(e.name);
-          return { ...e, scryfallId: card?.scryfallId ?? null };
+          return {
+            ...e,
+            scryfallId: card?.scryfallId ?? null,
+            colorIdentity: (card?.colorIdentity ?? []) as Color[],
+          };
         }),
+      );
+
+      // Combined WUBRG color identity across the selection.
+      const colorIdentity = resolveColorIdentity(
+        resolved.map((r) => ({ colorIdentity: r.colorIdentity })),
       );
 
       // Batch-fetch full images for the ids we found.
@@ -171,7 +184,7 @@ export function createBuildCommanderService(  config: AppConfig,
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
       const details = ids.length > 0 ? await scryfall.getCardsByIds(ids) : new Map();
 
-      return resolved.map((r) => {
+      const images = resolved.map((r) => {
         const override = overrideByName.get(normalizeCardName(r.name));
         const d = r.scryfallId ? details.get(r.scryfallId) : undefined;
         return {
@@ -182,14 +195,16 @@ export function createBuildCommanderService(  config: AppConfig,
           role: r.role,
         };
       });
+      return { images, colorIdentity };
     } catch {
       // Scryfall unavailable — fall back to any override printing, else text.
-      return entries.map((e) => ({
+      const images = entries.map((e) => ({
         name: e.name,
         imageUrl: overrideByName.get(normalizeCardName(e.name)) ?? null,
         scryfallId: null,
         role: e.role,
       }));
+      return { images, colorIdentity: [] };
     }
   }
   /**
@@ -310,13 +325,15 @@ export function createBuildCommanderService(  config: AppConfig,
       progress: 85,
       detail: `${recommendations.length} cards`,
     });
-    const [ownedEnriched, consideringEnriched, toBuyEnrichedRaw, commanderImages] =
+    const [ownedEnriched, consideringEnriched, toBuyEnrichedRaw, commanderResolved] =
       await Promise.all([
         enrichCards(split.ownedCards),
         enrichCards(split.consideringCards),
         enrichCards(split.toBuyCards),
         resolveCommanderImages(selection, matchedDeck?.commanderPrintings),
       ]);
+    const commanderImages = commanderResolved.images;
+    const colorIdentity = commanderResolved.colorIdentity;
 
     // 5. Price the to-buy cards to CAD using the cached FX rate (Req 8).
     emit({
@@ -346,6 +363,7 @@ export function createBuildCommanderService(  config: AppConfig,
       myDeck,
       sections,
       commanderImages,
+      colorIdentity,
       ownedCards,
       consideringCards,
       toBuyCards,

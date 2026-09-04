@@ -43,6 +43,11 @@ function scryfallUrl(id: string): string {
   return `https://scryfall.com/card/${id}`;
 }
 
+/** Scryfall mana-symbol SVG URL for a WUBRG color letter. */
+function colorSymbolUrl(color: string): string {
+  return `https://svgs.scryfall.io/card-symbols/${color.toUpperCase()}.svg`;
+}
+
 /** Anchor id for the "Your Deck vs EDHREC" section. */
 const MY_DECK_ANCHOR = 'section-your-deck';
 
@@ -339,6 +344,7 @@ export function BuildPage({ result, cached }: BuildPageProps) {
     myDeck,
     sections,
     commanderImages,
+    colorIdentity,
     edhrecRank,
     edhrecNumDecks,
     ownedCount,
@@ -373,6 +379,13 @@ export function BuildPage({ result, cached }: BuildPageProps) {
   return (
     <Layout title={`${username} — Build a Commander`}>
       <div class="progress-section">
+        {colorIdentity && colorIdentity.length > 0 && (
+          <div class="build-color-identity" aria-label="Color identity">
+            {colorIdentity.map((color) => (
+              <img src={colorSymbolUrl(color)} alt={color} width="26" height="26" />
+            ))}
+          </div>
+        )}
         <h1>Build {selectionNames.join(' & ')}</h1>
         {commanderImages.length > 0 && (
           <div class="build-commander-art">
