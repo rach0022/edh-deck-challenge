@@ -46,6 +46,23 @@ export interface UserDeckCards {
    * badged; `cardNames` is ignored in that case.
    */
   boardCards?: { name: string; board: CardBoard }[];
+  /** Moxfield public id, for linking to the deck. */
+  publicId?: string | null;
+  /**
+   * Commander card name(s) in the deck's command zone — used to match the deck
+   * to the currently selected commander (Feature 2a).
+   */
+  commanderNames?: string[];
+  /**
+   * The exact commander printing(s) the user runs — name, image, set, and
+   * collector number — so the header can show their printing (Feature 2a).
+   */
+  commanderPrintings?: {
+    name: string;
+    imageUrl: string | null;
+    setCode: string;
+    collectorNumber: string;
+  }[];
 }
 
 /**
@@ -154,10 +171,16 @@ export function buildOwnedCardIndex(
  * form a total, disjoint partition of the recommendations, so
  * `ownedCount + consideringCount + toBuyCount === recommendations.length`
  * (Req 7.2, 12.5).
+ *
+ * When `thisDeckCardSet` is supplied (the normalized card names of the user's
+ * existing deck for the selected commander), owned cards that also appear in
+ * that set are flagged `usedInThisCommanderDeck` so the UI can highlight them
+ * (Feature 2b). Cards that aren't owned are never flagged.
  */
 export function partitionRecommendations(
   recommendations: readonly EdhrecRecommendation[],
   index: OwnedCardIndex,
+  thisDeckCardSet?: ReadonlySet<string>,
 ): OwnedToBuySplit {
   const ownedCards: BuildCommanderCard[] = [];
   const consideringCards: BuildCommanderCard[] = [];
@@ -171,6 +194,10 @@ export function partitionRecommendations(
     // "considering". A card the user doesn't have at all is to-buy.
     const owned = board === 'mainboard';
     const considering = inCollection && !owned;
+    // Highlighted when the card is owned AND actually run in the user's deck
+    // for the currently selected commander (Feature 2b).
+    const usedInThisCommanderDeck =
+      owned && thisDeckCardSet ? thisDeckCardSet.has(normalized) : false;
 
     const card: BuildCommanderCard = {
       name: rec.name,
@@ -182,6 +209,7 @@ export function partitionRecommendations(
             a.localeCompare(b),
           )
         : [],
+      usedInThisCommanderDeck,
       art: null,
       imageUrl: null,
       // Card type is enriched from Scryfall downstream; default to "Other" so
@@ -214,8 +242,9 @@ export function partitionRecommendations(
 export function splitRecommendations(
   recommendations: readonly EdhrecRecommendation[],
   decks: readonly UserDeckCards[],
+  thisDeckCardSet?: ReadonlySet<string>,
 ): OwnedToBuySplit & { deckCount: number } {
   const index = buildOwnedCardIndex(decks);
-  const split = partitionRecommendations(recommendations, index);
+  const split = partitionRecommendations(recommendations, index, thisDeckCardSet);
   return { ...split, deckCount: index.deckCount };
 }

@@ -18,12 +18,14 @@
 
 import { Layout } from './layout.js';
 import { BoardBadge } from './board-badge.js';
+import { SideNav, type SideNavItem } from './side-nav.js';
 import type {
   BuildCommanderResponse,
   BuildSection,
   BuildTypeGroup,
   BuildCommanderCard,
   CommanderImage,
+  MyDeckComparison,
 } from '../types.js';
 
 interface BuildPageProps {
@@ -39,6 +41,23 @@ function cad(amount: number | null): string {
 /** Scryfall card page URL for a card id. */
 function scryfallUrl(id: string): string {
   return `https://scryfall.com/card/${id}`;
+}
+
+/** Anchor id for the "Your Deck vs EDHREC" section. */
+const MY_DECK_ANCHOR = 'section-your-deck';
+
+/**
+ * Turns a section name into a stable, URL-safe anchor id (e.g.
+ * "High Synergy Cards" → "section-high-synergy-cards"). Non-alphanumerics
+ * collapse to single hyphens so the side-nav links and section ids always
+ * agree. An index suffix keeps ids unique if two panels share a name.
+ */
+function sectionAnchorId(name: string, index: number): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `section-${slug || 'panel'}-${index}`;
 }
 
 /** Header label shown under each commander/partner/companion card image. */
@@ -104,7 +123,18 @@ function OwnedCard({ card }: { card: BuildCommanderCard }) {
   );
 
   return (
-    <div class="build-owned-card">
+    <div
+      class={
+        card.usedInThisCommanderDeck
+          ? 'build-owned-card build-owned-card--in-deck'
+          : 'build-owned-card'
+      }
+      title={
+        card.usedInThisCommanderDeck
+          ? 'Already in your deck for this commander'
+          : undefined
+      }
+    >
       {card.scryfallId ? (
         <a
           href={scryfallUrl(card.scryfallId)}
@@ -175,9 +205,9 @@ function ToBuyTypeGroup({ group }: { group: BuildTypeGroup }) {
 
 // ─── One EDHREC section ──────────────────────────────────────────────────────
 
-function Section({ section }: { section: BuildSection }) {
+function Section({ section, anchorId }: { section: BuildSection; anchorId: string }) {
   return (
-    <section class="build-section">
+    <section class="build-section" id={anchorId}>
       <h2 class="build-section-header">
         {section.name}
         <span class="build-section-meta">
@@ -238,12 +268,75 @@ function Section({ section }: { section: BuildSection }) {
   );
 }
 
+// ─── "Your Deck vs EDHREC" comparison (Feature 2a) ───────────────────────────
+
+function MyDeckSection({ myDeck }: { myDeck: MyDeckComparison }) {
+  const uniquenessPct = Math.round(myDeck.uniqueness * 100);
+  const overlapPct =
+    myDeck.deckCardCount === 0
+      ? 0
+      : Math.round((myDeck.edhrecCardsUsed / myDeck.deckCardCount) * 100);
+  const deckUrl = myDeck.publicId
+    ? `https://www.moxfield.com/decks/${myDeck.publicId}`
+    : null;
+
+  return (
+    <section class="build-section build-mydeck" id={MY_DECK_ANCHOR}>
+      <h2 class="build-section-header">
+        Your Deck vs EDHREC
+        <span class="build-section-meta">
+          {deckUrl ? (
+            <a href={deckUrl} target="_blank" rel="noopener" class="build-mydeck-link">
+              {myDeck.deckName}
+            </a>
+          ) : (
+            myDeck.deckName
+          )}
+        </span>
+      </h2>
+      <p class="build-mydeck-intro">
+        You already have a deck for this commander. Here's how your build
+        compares to EDHREC's aggregate recommendations.
+      </p>
+      <div class="build-summary build-mydeck-stats">
+        <div class="build-summary-stat">
+          <span class="build-summary-num">{uniquenessPct}%</span>
+          <span class="build-summary-label">uniqueness</span>
+        </div>
+        <div class="build-summary-stat">
+          <span class="build-summary-num">
+            {myDeck.edhrecCardsUsed}
+            <span class="build-mydeck-denom">/{myDeck.deckCardCount}</span>
+          </span>
+          <span class="build-summary-label">EDHREC cards used ({overlapPct}%)</span>
+        </div>
+        <div class="build-summary-stat">
+          <span class="build-summary-num">{myDeck.deckCardCount}</span>
+          <span class="build-summary-label">cards in your deck</span>
+        </div>
+        <div class="build-summary-stat">
+          <span class="build-summary-num">{myDeck.edhrecTotal}</span>
+          <span class="build-summary-label">EDHREC recommendations</span>
+        </div>
+      </div>
+      <p class="build-mydeck-note">
+        Uniqueness is the share of your deck's cards that <em>aren't</em> in
+        EDHREC's recommendation set — higher means a spicier, more off-meta
+        build. Cards you already run appear with a{' '}
+        <span class="build-mydeck-swatch" aria-hidden="true"></span> gold border
+        in the sections below.
+      </p>
+    </section>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function BuildPage({ result, cached }: BuildPageProps) {
   const {
     username,
     selection,
+    myDeck,
     sections,
     commanderImages,
     edhrecRank,
@@ -261,6 +354,21 @@ export function BuildPage({ result, cached }: BuildPageProps) {
 
   const selectionNames = [selection.commander];
   if (selection.partner) selectionNames.push(selection.partner);
+
+  // Precompute stable anchor ids so the side nav and the sections agree.
+  const sectionAnchors = sections.map((section, i) => sectionAnchorId(section.name, i));
+
+  // Side-nav items: the "Your Deck" comparison (when present) followed by each
+  // EDHREC section, each annotated with its owned count.
+  const navItems: SideNavItem[] = [];
+  if (myDeck) navItems.push({ id: MY_DECK_ANCHOR, label: 'Your Deck vs EDHREC' });
+  sections.forEach((section, i) => {
+    navItems.push({
+      id: sectionAnchors[i],
+      label: section.name,
+      meta: `${section.ownedCount}/${section.ownedCount + section.consideringCount + section.toBuyCount}`,
+    });
+  });
 
   return (
     <Layout title={`${username} — Build a Commander`}>
@@ -397,10 +505,16 @@ export function BuildPage({ result, cached }: BuildPageProps) {
           </p>
         </div>
       ) : (
-        <div class="build-sections">
-          {sections.map((section) => (
-            <Section section={section} />
-          ))}
+        <div class="page-with-sidenav">
+          <SideNav items={navItems} />
+          <div class="page-with-sidenav-content">
+            {myDeck && <MyDeckSection myDeck={myDeck} />}
+            <div class="build-sections">
+              {sections.map((section, i) => (
+                <Section section={section} anchorId={sectionAnchors[i]} />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

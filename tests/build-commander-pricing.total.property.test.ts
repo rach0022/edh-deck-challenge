@@ -30,6 +30,7 @@ function makeCard(cad: number | null): BuildCommanderCard {
     owned: false,
     board: null,
     sourceDecks: [],
+    usedInThisCommanderDeck: false,
     art: null,
     imageUrl: null,
     cardType: 'Other',

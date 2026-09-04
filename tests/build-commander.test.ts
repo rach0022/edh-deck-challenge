@@ -452,3 +452,78 @@ describe('BuildCommanderService.refreshResult', () => {
     expect(cache.setCalls[0].value).toEqual(data);
   });
 });
+
+
+// ─── Commander printing override (Feature 2a) ────────────────────────────────
+
+/**
+ * Builds a deck detail with a double-faced commander whose Moxfield entry has
+ * only set + collector number (NO inline image_uris and no card_faces images) —
+ * the common Moxfield shape for DFCs. This is the case that previously lost the
+ * user's printing at the top of the Build page.
+ */
+function dfcCommanderDeck(): MoxfieldDeckDetail {
+  const commanderName = 'Liliana, Heretical Healer // Liliana, Defiant Necromancer';
+  return {
+    id: 'internal-lili',
+    publicId: 'lili',
+    name: 'Mainframe Lili',
+    format: 'commander',
+    commanders: {
+      [commanderName]: {
+        quantity: 1,
+        card: {
+          name: commanderName,
+          color_identity: ['B'],
+          set: 'dka',
+          cn: '999',
+          scryfall_id: 'lili-scry-id',
+          // No image_uris, no card_faces — mirrors Moxfield's typical DFC payload.
+        },
+      } as MoxfieldCardEntry,
+    },
+    mainboard: { 'Sol Ring': cardEntry('Sol Ring') },
+  };
+}
+
+describe('BuildCommanderService — commander printing at the top of the page', () => {
+  it('uses the deck printing (built from set/collector number) for a DFC commander when Moxfield omits the image', async () => {
+    const lilianaSelection: CommanderSelection = {
+      // The user picked the front face (as EDHREC/autocomplete present it).
+      commander: 'Liliana, Heretical Healer',
+      partner: null,
+      companion: null,
+    };
+    const cache = createFakeCache();
+    const moxfield = createFakeMoxfield({
+      summaries: [deckSummary('lili', 'Mainframe Lili')],
+      details: { lili: dfcCommanderDeck() },
+    });
+    const edhrec = createFakeEdhrec([rec('Sol Ring')], 'liliana-heretical-healer');
+    const fx = createFakeFx();
+
+    const service = createBuildCommanderService(
+      config,
+      cache,
+      moxfield,
+      edhrec,
+      fx,
+      createFakeScryfall(cardDetails),
+    );
+    const { data } = await service.getResult(lilianaSelection, 'testuser');
+
+    // The deck matched, so the comparison section is present.
+    expect(data.myDeck).not.toBeNull();
+    expect(data.myDeck!.deckName).toBe('Mainframe Lili');
+
+    // The commander header image is the user's exact printing, built from the
+    // deck's set + collector number (same Scryfall image endpoint the deck
+    // detail / cEDH pages use) — NOT the fake generic lookup (which returns
+    // null here).
+    const header = data.commanderImages.find((c) => c.role === 'commander')!;
+    expect(header).toBeDefined();
+    expect(header.imageUrl).toBe(
+      'https://api.scryfall.com/cards/dka/999?format=image&version=normal',
+    );
+  });
+});

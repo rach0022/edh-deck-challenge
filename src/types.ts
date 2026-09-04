@@ -501,6 +501,14 @@ export interface BuildCommanderCard {
   board: CardBoard | null;
   /** Deck names containing this card (Source_Decks); empty for to-buy cards. */
   sourceDecks: string[];
+  /**
+   * True when this card is owned AND present in the user's existing deck for
+   * the *currently selected* commander (see `BuildCommanderResponse.myDeck`).
+   * Drives the highlighted border on the results page so the user can see, at
+   * a glance, which EDHREC picks they already run in this specific deck.
+   * Always false when the user has no deck for the selected commander.
+   */
+  usedInThisCommanderDeck: boolean;
   /** Card art (art_crop) for compact display; null if unknown. */
   art: string | null;
   /** Full card image (normal) for the owned-card gallery; null if unknown. */
@@ -566,10 +574,63 @@ export interface CommanderImage {
   role: CommanderImageRole;
 }
 
+/**
+ * The exact commander printing a user runs in their deck for the selected
+ * commander — used to show their specific printing's art in the results header
+ * (Feature 2a) instead of a generic Scryfall lookup.
+ */
+export interface MyDeckCommanderPrinting {
+  name: string;
+  /** Full card image (normal) of the user's printing; null if unknown. */
+  imageUrl: string | null;
+  /** Set code of the printing, e.g. "cmm". */
+  setCode: string;
+  /** Collector number of the printing. */
+  collectorNumber: string;
+}
+
+/**
+ * A comparison of the user's *existing* deck for the selected commander against
+ * EDHREC's recommendations. Present only when the user already has a deck whose
+ * commander(s) match the current selection (Feature 2a). Powers the leading
+ * "Your Deck vs EDHREC" section on the results page.
+ */
+export interface MyDeckComparison {
+  /** The matched deck's display name. */
+  deckName: string;
+  /** Moxfield public id of the matched deck (for linking), or null. */
+  publicId: string | null;
+  /**
+   * The exact commander printing(s) from the user's deck, in command-zone
+   * order, so the header can display their actual printing's art.
+   */
+  commanderPrintings: MyDeckCommanderPrinting[];
+  /** Total distinct (normalized) cards in the user's deck. */
+  deckCardCount: number;
+  /**
+   * How many of the user's deck cards also appear in EDHREC's recommendation
+   * set for this commander (the "on-theme" overlap).
+   */
+  edhrecCardsUsed: number;
+  /** Total number of EDHREC recommendations for this commander. */
+  edhrecTotal: number;
+  /**
+   * Uniqueness rating in [0, 1]: the fraction of the user's deck cards that are
+   * NOT in EDHREC's recommendation set. Higher = spicier/more off-meta. 0 when
+   * the deck is empty.
+   */
+  uniqueness: number;
+}
+
 /** Full response for the Build-a-Commander results page. */
 export interface BuildCommanderResponse {
   username: string;
   selection: CommanderSelection;
+  /**
+   * The comparison of the user's existing deck for this commander against
+   * EDHREC, or null when the user has no deck for the selected commander.
+   */
+  myDeck: MyDeckComparison | null;
   /**
    * Recommendations grouped by EDHREC section (panel), each split into owned /
    * to-buy and sub-grouped by card type. This is what the results page renders.

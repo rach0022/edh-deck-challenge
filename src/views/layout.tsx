@@ -90,7 +90,13 @@ const css = `
     --glow-purple: rgba(168, 85, 247, 0.15);
     --glow-green: rgba(52, 211, 153, 0.12);
     --filled-border: rgba(52, 211, 153, 0.6);
-    --radius-sm: 8px;
+    /* Height of the sticky top header — used to offset sticky side nav and
+       anchor scroll targets so they aren't hidden underneath it. */
+    --header-height: 74px;
+    /* Gold accent for cards the user already runs in this commander's deck. */
+    --in-deck-gold: #f0c040;
+    --in-deck-border: rgba(240, 192, 64, 0.85);
+    --in-deck-glow: rgba(240, 192, 64, 0.28);    --radius-sm: 8px;
     --radius-md: 14px;
     --radius-lg: 20px;
     --radius-xl: 28px;
@@ -177,7 +183,7 @@ const css = `
     letter-spacing: -0.5px;
   }
 
-  nav {
+  .header-inner nav {
     display: flex;
     gap: 1.5rem;
   }
@@ -1994,6 +2000,128 @@ const css = `
     box-shadow: 0 10px 28px rgba(52, 211, 153, 0.18);
   }
 
+  /* Cards the user already runs in this commander's deck (Feature 2b): a
+     gold border + glow so they stand out from other owned cards. */
+  .build-owned-card--in-deck .build-owned-img,
+  .build-owned-card--in-deck .build-owned-noimg {
+    border: 3px solid var(--in-deck-border);
+    box-shadow: 0 0 0 1px var(--in-deck-glow), 0 4px 18px var(--in-deck-glow);
+  }
+  .build-owned-card--in-deck:hover .build-owned-img {
+    box-shadow: 0 0 0 1px var(--in-deck-glow), 0 10px 28px var(--in-deck-glow);
+  }
+  .build-owned-card--in-deck .build-owned-name::after {
+    content: '★ in deck';
+    display: inline-block;
+    margin-left: 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--in-deck-gold);
+    white-space: nowrap;
+  }
+
+  /* ─── "Your Deck vs EDHREC" comparison (Feature 2a) ─────────────── */
+
+  .build-mydeck {
+    border: 1px solid var(--in-deck-border);
+    box-shadow: 0 0 24px var(--in-deck-glow);
+    background: rgba(240, 192, 64, 0.04);
+    margin-bottom: 2.5rem;
+  }
+  .build-mydeck-link { color: var(--in-deck-gold); text-decoration: none; }
+  .build-mydeck-link:hover { text-decoration: underline; }
+  .build-mydeck-intro { color: var(--text-muted); margin: 0.25rem 0 1rem; }
+  .build-mydeck-stats { margin-bottom: 1rem; }
+  .build-mydeck-denom {
+    font-size: 0.6em;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .build-mydeck-note { color: var(--text-muted); font-size: 0.85rem; }
+  .build-mydeck-swatch {
+    display: inline-block;
+    width: 0.85rem;
+    height: 0.85rem;
+    vertical-align: middle;
+    border-radius: 3px;
+    border: 2px solid var(--in-deck-border);
+    box-shadow: 0 0 6px var(--in-deck-glow);
+  }
+
+  /* ─── Side navigation (Feature 3) ───────────────────────────────── */
+
+  .page-with-sidenav {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+  }
+  .page-with-sidenav-content { min-width: 0; }
+
+  .side-nav {
+    position: sticky;
+    /* Clear the sticky top header so the nav isn't hidden underneath it. */
+    top: calc(var(--header-height) + 1rem);
+    align-self: start;
+    max-height: calc(100vh - var(--header-height) - 2rem);
+    overflow-y: auto;
+  }
+  .side-nav-inner {
+    display: block;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+  }
+  .side-nav-title {
+    margin: 0 0 0.75rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .side-nav-list { list-style: none; margin: 0; padding: 0; }
+  .side-nav-list li { margin: 0; }
+  .side-nav-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--text-secondary, #cbd5e1);
+    font-size: 0.85rem;
+    line-height: 1.35;
+    transition: background 0.15s, color 0.15s;
+    border-left: 2px solid transparent;
+  }
+  .side-nav-link:hover {
+    background: rgba(168, 85, 247, 0.12);
+    color: #fff;
+    border-left-color: var(--accent-purple);
+  }
+  .side-nav-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .side-nav-meta {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Offset anchor jumps so the sticky header doesn't cover the target. */
+  .build-section, .build-mydeck,
+  .combos-section, .potential-section, .decklist-section,
+  #section-commanders,
+  .cedh-match, .cedh-collection-section {
+    scroll-margin-top: calc(var(--header-height) + 1rem);
+  }
+
   .build-owned-noimg {
     width: 100%;
     aspect-ratio: 488 / 680;
@@ -2263,6 +2391,11 @@ const css = `
     .cedh-userdecks-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
     .build-tobuy-groups { columns: 1; }
     .build-owned-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    /* Collapse the side nav to a horizontal scroller above the content. */
+    .page-with-sidenav { grid-template-columns: 1fr; gap: 1rem; }
+    .side-nav { position: static; max-height: none; overflow: visible; }
+    .side-nav-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .side-nav-link { border-left: none; }
     .build-section { padding: 1.25rem 1rem; }
   }
 

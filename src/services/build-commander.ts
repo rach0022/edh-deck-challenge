@@ -38,6 +38,13 @@ import {
   partitionRecommendations,
   type UserDeckCards,
 } from '../domain/build-commander-split.js';
+import {
+  findMatchingUserDeck,
+  computeMyDeckComparison,
+  type UserDeckForMatch,
+} from '../domain/build-commander-mydeck.js';
+import { extractCommanders } from '../domain/commander-extractor.js';
+import { normalizeCardName } from '../domain/deck-similarity.js';
 import { computeBuyListTotalCad, priceCards } from '../domain/build-commander-pricing.js';
 import { buildSections } from '../domain/build-commander-sections.js';
 import { buildCacheKey } from '../domain/selection-key.js';
@@ -62,8 +69,21 @@ export interface BuildCommanderService {
   ): Promise<BuildCommanderResponse>;
 }
 
-export function createBuildCommanderService(
-  config: AppConfig,
+/**
+ * Builds a Scryfall "normal" card-image URL from a set code + collector number,
+ * or null when either is missing. Moxfield deck payloads frequently omit inline
+ * image URIs and only provide set/collector number, so this lets us still show
+ * the user's exact printing (matching the deck-detail page's approach).
+ */
+function printingImageUrl(
+  setCode: string | undefined,
+  collectorNumber: string | undefined,
+): string | null {
+  if (!setCode || !collectorNumber) return null;
+  return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=normal`;
+}
+
+export function createBuildCommanderService(  config: AppConfig,
   cache: CacheService,
   moxfield: MoxfieldService,
   edhrec: EdhrecService,
@@ -107,6 +127,12 @@ export function createBuildCommanderService(
    */
   async function resolveCommanderImages(
     selection: CommanderSelection,
+    printingOverrides?: {
+      name: string;
+      imageUrl: string | null;
+      setCode?: string;
+      collectorNumber?: string;
+    }[],
   ): Promise<CommanderImage[]> {
     // Primary commander, then partner, then companion — each shown at the top
     // of the page with its role labelled.
@@ -116,6 +142,19 @@ export function createBuildCommanderService(
       { name: selection.companion ?? '', role: 'companion' as const },
     ].filter((e) => typeof e.name === 'string' && e.name.trim().length > 0);
     if (entries.length === 0) return [];
+
+    // When the user has a deck for this commander, prefer the exact printing
+    // image they run (Feature 2a) over a generic Scryfall lookup. Keyed by
+    // normalized name so case/whitespace differences still match. Moxfield
+    // often omits inline image_uris and only gives set + collector number, so
+    // fall back to building the Scryfall image URL from those (same approach
+    // as the deck-detail page) — otherwise we'd lose the user's printing for
+    // common cards like double-faced commanders.
+    const overrideByName = new Map<string, string>();
+    for (const p of printingOverrides ?? []) {
+      const img = p.imageUrl ?? printingImageUrl(p.setCode, p.collectorNumber);
+      if (img) overrideByName.set(normalizeCardName(p.name), img);
+    }
 
     try {
       // name -> scryfall id (+ name/role), in selection order.
@@ -133,19 +172,21 @@ export function createBuildCommanderService(
       const details = ids.length > 0 ? await scryfall.getCardsByIds(ids) : new Map();
 
       return resolved.map((r) => {
+        const override = overrideByName.get(normalizeCardName(r.name));
         const d = r.scryfallId ? details.get(r.scryfallId) : undefined;
         return {
           name: r.name,
-          imageUrl: d?.imageUrl ?? null,
+          // User's own printing wins when available.
+          imageUrl: override ?? d?.imageUrl ?? null,
           scryfallId: r.scryfallId,
           role: r.role,
         };
       });
     } catch {
-      // Scryfall unavailable — header falls back to text.
+      // Scryfall unavailable — fall back to any override printing, else text.
       return entries.map((e) => ({
         name: e.name,
-        imageUrl: null,
+        imageUrl: overrideByName.get(normalizeCardName(e.name)) ?? null,
         scryfallId: null,
         role: e.role,
       }));
@@ -182,10 +223,19 @@ export function createBuildCommanderService(
       });
 
       const detail = await moxfield.fetchDeckDetail(summary.publicId);
+      const extraction = extractCommanders(detail);
       decks.push({
         name: detail.name,
         cardNames: extractDeckCardNames(detail),
         boardCards: extractDeckBoardCards(detail),
+        publicId: detail.publicId,
+        commanderNames: extraction.commanders.map((c) => c.name),
+        commanderPrintings: extraction.commanders.map((c) => ({
+          name: c.name,
+          imageUrl: c.imageUrl,
+          setCode: c.setCode,
+          collectorNumber: c.collectorNumber,
+        })),
       });
     }
 
@@ -230,9 +280,27 @@ export function createBuildCommanderService(
       if (!sectionOrder.includes(name)) sectionOrder.push(name);
     }
 
+    // 2b/2a. If the user already has a deck for THIS commander, compute the
+    // comparison and the set of that deck's cards so owned recommendations run
+    // in this specific deck can be highlighted.
+    const decksForMatch: UserDeckForMatch[] = decks.map((d) => ({
+      name: d.name,
+      publicId: d.publicId ?? null,
+      commanderNames: d.commanderNames ?? [],
+      commanderPrintings: d.commanderPrintings ?? [],
+      cardNames: d.cardNames,
+    }));
+    const matchedDeck = findMatchingUserDeck(selection, decksForMatch);
+    const myDeck = matchedDeck
+      ? computeMyDeckComparison(matchedDeck, recommendations)
+      : null;
+    const thisDeckCardSet = matchedDeck
+      ? new Set(matchedDeck.cardNames.map((n) => normalizeCardName(n)).filter(Boolean))
+      : undefined;
+
     // 3. Partition into owned / to-buy, attaching each owned card's source
     //    decks (Req 6.3, 6.4, 10.1, 10.3).
-    const split = partitionRecommendations(recommendations, index);
+    const split = partitionRecommendations(recommendations, index, thisDeckCardSet);
 
     // 4. Enrich every card with Scryfall type/image/price so the results page
     //    can sub-group by card type and show owned cards as images.
@@ -247,7 +315,7 @@ export function createBuildCommanderService(
         enrichCards(split.ownedCards),
         enrichCards(split.consideringCards),
         enrichCards(split.toBuyCards),
-        resolveCommanderImages(selection),
+        resolveCommanderImages(selection, matchedDeck?.commanderPrintings),
       ]);
 
     // 5. Price the to-buy cards to CAD using the cached FX rate (Req 8).
@@ -275,6 +343,7 @@ export function createBuildCommanderService(
     return {
       username,
       selection,
+      myDeck,
       sections,
       commanderImages,
       ownedCards,

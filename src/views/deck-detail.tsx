@@ -3,6 +3,7 @@
  */
 
 import { Layout } from './layout.js';
+import { SideNav, type SideNavItem } from './side-nav.js';
 import type { DeckDetailResponse, CardTypeGroup, DeckCardInfo, Color, SpellbookCombo, PotentialComboCard } from '../types.js';
 
 interface DeckDetailPageProps {
@@ -146,7 +147,7 @@ function CombosSection({ combos }: { combos: SpellbookCombo[] }) {
   if (combos.length === 0) return null;
 
   return (
-    <div class="combos-section">
+    <div class="combos-section" id="section-combos">
       <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
         ♾️ Combos Found
         <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem;">
@@ -202,7 +203,7 @@ function PotentialCardsSection({ cards }: { cards: PotentialComboCard[] }) {
   const totalCombos = cards.reduce((sum, c) => sum + c.comboCount, 0);
 
   return (
-    <div class="potential-section">
+    <div class="potential-section" id="section-potential-combos">
       <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
         🧩 Potential Combos
         <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem;">
@@ -240,6 +241,32 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
     ? []
     : deck.colorIdentityKey.split('') as Color[];
 
+  const hasCombos = !!(deck.combos && deck.combos.combos.length > 0);
+  const hasPotential = !!(deck.combos && deck.combos.potentialCards.length > 0);
+  const hasDecklist = deck.cardsByType.length > 0;
+
+  // Build the in-page nav from whichever sections are present.
+  const navItems: SideNavItem[] = [
+    { id: 'section-commanders', label: `Commander${deck.commanders.length > 1 ? 's' : ''}` },
+  ];
+  if (hasCombos) {
+    navItems.push({
+      id: 'section-combos',
+      label: 'Combos Found',
+      meta: String(deck.combos!.combos.length),
+    });
+  }
+  if (hasPotential) {
+    navItems.push({ id: 'section-potential-combos', label: 'Potential Combos' });
+  }
+  if (hasDecklist) {
+    navItems.push({
+      id: 'section-decklist',
+      label: 'Decklist',
+      meta: String(deck.cardCount),
+    });
+  }
+
   return (
     <Layout title={`${deck.name} — Necro Nerds`}>
       <div class="deck-header">
@@ -262,50 +289,53 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
         </div>
       </div>
 
-      <h2 style="color: #ccc; margin-bottom: 1rem;">
-        Commander{deck.commanders.length > 1 ? 's' : ''}
-      </h2>
-
-      <div class="commanders-display">
-        {deck.commanders.map((commander) => (
-          <div class="commander-card">
-            {commander.setCode && commander.collectorNumber ? (
-              <img
-                src={cardImageUrl(commander.setCode, commander.collectorNumber)}
-                alt={commander.name}
-                width="200"
-                loading="lazy"
-              />
-            ) : (
-              <div style="width: 200px; height: 280px; background: #3a3a5a; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
-                No image
-              </div>
-            )}
-            <div class="name">{commander.name}</div>
-          </div>
-        ))}
-      </div>
-
-      {deck.combos && deck.combos.combos.length > 0 && (
-        <CombosSection combos={deck.combos.combos} />
-      )}
-
-      {deck.combos && deck.combos.potentialCards.length > 0 && (
-        <PotentialCardsSection cards={deck.combos.potentialCards} />
-      )}
-
-      {deck.cardsByType.length > 0 && (
-        <div class="decklist-section">
-          <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
-            Decklist
+      <div class="page-with-sidenav">
+        <SideNav items={navItems} />
+        <div class="page-with-sidenav-content">
+          <h2 id="section-commanders" style="color: #ccc; margin-bottom: 1rem;">
+            Commander{deck.commanders.length > 1 ? 's' : ''}
           </h2>
-          <div class="decklist-grid">
-            {deck.cardsByType.map((group) => (
-              <CardTypeSection group={group} />
+
+          <div class="commanders-display">
+            {deck.commanders.map((commander) => (
+              <div class="commander-card">
+                {commander.setCode && commander.collectorNumber ? (
+                  <img
+                    src={cardImageUrl(commander.setCode, commander.collectorNumber)}
+                    alt={commander.name}
+                    width="200"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div style="width: 200px; height: 280px; background: #3a3a5a; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+                    No image
+                  </div>
+                )}
+                <div class="name">{commander.name}</div>
+              </div>
             ))}
           </div>
+
+          {hasCombos && <CombosSection combos={deck.combos!.combos} />}
+
+          {hasPotential && (
+            <PotentialCardsSection cards={deck.combos!.potentialCards} />
+          )}
+
+          {hasDecklist && (
+            <div class="decklist-section" id="section-decklist">
+              <h2 style="color: #ccc; margin-bottom: 1.5rem; margin-top: 2.5rem;">
+                Decklist
+              </h2>
+              <div class="decklist-grid">
+                {deck.cardsByType.map((group) => (
+                  <CardTypeSection group={group} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <div style="margin-top: 2rem;">
         <a href="/" class="back-link" id="back-link">← Back</a>

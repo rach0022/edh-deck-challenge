@@ -10,6 +10,7 @@
 
 import { Layout } from './layout.js';
 import { BoardBadge } from './board-badge.js';
+import { SideNav, type SideNavItem } from './side-nav.js';
 import type {
   CedhMatchResponse,
   CedhMatch,
@@ -154,14 +155,14 @@ function CardGroup({ group }: { group: ReferenceCardGroup }) {
 
 // ─── A single reference-deck match ───────────────────────────────────────────
 
-function MatchCard({ match, rank }: { match: CedhMatch; rank: number }) {
+function MatchCard({ match, rank, anchorId }: { match: CedhMatch; rank: number; anchorId: string }) {
   const { deck } = match;
   const percent = pct(match.ownedFraction);
   const commanderImage = deck.commanderImages.find((img) => !!img) ?? null;
   const isHero = rank === 1;
 
   return (
-    <div class={`cedh-match ${isHero ? 'cedh-match-hero' : ''}`}>
+    <div class={`cedh-match ${isHero ? 'cedh-match-hero' : ''}`} id={anchorId}>
       <div class="cedh-match-rank">#{rank}</div>
 
       {commanderImage && (
@@ -252,6 +253,25 @@ export function CedhMatchPage({ result, cached }: CedhMatchPageProps) {
 
   const fxDate = fx.fetchedAt ? new Date(fx.fetchedAt).toISOString().slice(0, 10) : '';
 
+  const matchAnchorId = (rank: number) => `match-${rank}`;
+
+  // Side-nav: one entry per ranked match, then the user's decks section.
+  const navItems: SideNavItem[] = [];
+  matches.forEach((match, i) => {
+    navItems.push({
+      id: matchAnchorId(i + 1),
+      label: `#${i + 1} ${match.deck.title}`,
+      meta: `${pct(match.ownedFraction)}%`,
+    });
+  });
+  if (userDecks.length > 0) {
+    navItems.push({
+      id: 'section-your-decks',
+      label: 'Your Decks',
+      meta: String(userDecks.length),
+    });
+  }
+
   return (
     <Layout title={`${username} — Build a cEDH Deck`}>
       <div class="progress-section">
@@ -286,20 +306,25 @@ export function CedhMatchPage({ result, cached }: CedhMatchPageProps) {
           </p>
         </div>
       ) : (
-        <div class="cedh-matches">
-          {matches.map((match, i) => (
-            <MatchCard match={match} rank={i + 1} />
-          ))}
-        </div>
-      )}
+        <div class="page-with-sidenav">
+          <SideNav items={navItems} />
+          <div class="page-with-sidenav-content">
+            <div class="cedh-matches">
+              {matches.map((match, i) => (
+                <MatchCard match={match} rank={i + 1} anchorId={matchAnchorId(i + 1)} />
+              ))}
+            </div>
 
-      {userDecks.length > 0 && (
-        <div class="cedh-collection-section">
-          <h2 class="category-header">Your Decks Used for Matching</h2>
-          <div class="cedh-userdecks-grid">
-            {userDecks.map((deck) => (
-              <UserDeckCard deck={deck} />
-            ))}
+            {userDecks.length > 0 && (
+              <div class="cedh-collection-section" id="section-your-decks">
+                <h2 class="category-header">Your Decks Used for Matching</h2>
+                <div class="cedh-userdecks-grid">
+                  {userDecks.map((deck) => (
+                    <UserDeckCard deck={deck} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

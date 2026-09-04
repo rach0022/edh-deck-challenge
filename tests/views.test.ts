@@ -50,6 +50,7 @@ function ownedCard(overrides: Partial<BuildCommanderCard> = {}): BuildCommanderC
     owned: true,
     board: 'mainboard',
     sourceDecks: ['My Atraxa Deck', 'Superfriends'],
+    usedInThisCommanderDeck: false,
     art: 'https://img/art/sol-ring',
     imageUrl: 'https://img/normal/sol-ring',
     cardType: 'Artifact',
@@ -68,6 +69,7 @@ function toBuyCard(overrides: Partial<BuildCommanderCard> = {}): BuildCommanderC
     owned: false,
     board: null,
     sourceDecks: [],
+    usedInThisCommanderDeck: false,
     art: null,
     imageUrl: null,
     cardType: 'Instant',
@@ -139,6 +141,7 @@ function buildResponse(
       partner: 'Tymna the Weaver',
       companion: 'Lurrus of the Dream-Den',
     },
+    myDeck: null,
     sections,
     commanderImages: [
       { name: 'Atraxa, Praetors Voice', imageUrl: 'https://img/cmd/atraxa', scryfallId: 'atraxa-id', role: 'commander' },
