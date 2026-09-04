@@ -134,6 +134,7 @@ export function DeckAnalysisPage({ result, cached }: DeckAnalysisPageProps) {
       <div class="page-with-sidenav">
         <SideNav items={navItems} />
         <div class="page-with-sidenav-content">
+          <div class="build-sections">
           {/* ── Power & Salt ─────────────────────────────────────────── */}
           <section class="build-section" id="section-power">
             <h2 class="build-section-header">Power &amp; Salt (estimate)</h2>
@@ -260,6 +261,7 @@ export function DeckAnalysisPage({ result, cached }: DeckAnalysisPageProps) {
               </>
             )}
           </section>
+          </div>
         </div>
       </div>
 

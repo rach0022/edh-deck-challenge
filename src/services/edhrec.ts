@@ -198,6 +198,10 @@ export function createEdhrecService(
    * (N starting at 1 for the second page). Results are merged and cached under
    * a single global key. Any page that 404s or fails to fetch is skipped, and a
    * total failure degrades to an empty list.
+   *
+   * Unlike commander pages, this public top-list JSON does not sit behind
+   * Cloudflare, so we use a plain `fetch` (with a timeout) rather than the
+   * Puppeteer browser — simpler and one fewer failure mode.
    */
   async function getSaltScores(): Promise<SaltEntry[]> {
     const cached = await cache.get<SaltEntry[]>(EDHREC_SALT_CACHE_KEY);
@@ -209,10 +213,19 @@ export function createEdhrecService(
       // First page is salt.json; subsequent pages are salt--1.json, salt--2.json…
       const path = page === 0 ? 'salt' : `salt--${page}`;
       const url = `${config.edhrecBaseUrl}/pages/top/${path}.json`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), config.edhrecTimeoutMs);
       try {
-        const { status, body } = await fetchJson(url);
-        if (status < 200 || status >= 300) break; // no more pages / unavailable
-        for (const entry of parseSaltEntries(body)) {
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (!res.ok) break; // no more pages / unavailable
+        const body = await res.json();
+        const parsed = parseSaltEntries(body);
+        if (parsed.length === 0) break; // ran past the last page
+        for (const entry of parsed) {
           const key = entry.name.toLowerCase();
           if (seen.has(key)) continue;
           seen.add(key);
@@ -221,12 +234,16 @@ export function createEdhrecService(
       } catch {
         // Best-effort: stop paginating on the first failure, keep what we have.
         break;
+      } finally {
+        clearTimeout(timer);
       }
     }
 
-    // Cache even an empty result (short-lived) so a transient EDHREC outage
-    // doesn't hammer the endpoint on every analysis.
-    await cache.set(EDHREC_SALT_CACHE_KEY, entries, config.cacheTtlSeconds);
+    // Only cache a non-empty result — caching an empty list would hide a
+    // transient outage behind the TTL and blank out salt for every deck.
+    if (entries.length > 0) {
+      await cache.set(EDHREC_SALT_CACHE_KEY, entries, config.cacheTtlSeconds);
+    }
     return entries;
   }
 

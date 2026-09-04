@@ -36,7 +36,7 @@ function round2(n: number): number {
 const TOP_SALTY_LIMIT = 10;
 
 /** Salt threshold above which a single card is considered "notably salty". */
-const HIGH_SALT_THRESHOLD = 1.5;
+const HIGH_SALT_THRESHOLD = 1.0;
 
 /**
  * Builds a normalized-name → salt lookup from the global salt dataset.

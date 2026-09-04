@@ -128,4 +128,28 @@ describe('analyzeDeckSalt', () => {
     expect(result.averageSalt).toBe(0);
     expect(result.topSaltyCards).toEqual([]);
   });
+
+  it('counts a card at the 1.0 "notably salty" threshold but not one just below', () => {
+    const idx = buildSaltIndex([
+      { name: 'At Threshold', salt: 1.0 },
+      { name: 'Just Below', salt: 0.99 },
+    ]);
+    const withGC = analyzeDeckSalt(
+      [
+        { name: 'At Threshold', scryfallId: 'x' },
+        { name: 'Just Below', scryfallId: 'y' },
+      ],
+      idx,
+      // 8 high-salt cards would be needed for the +1; here we just assert the
+      // rationale reflects exactly one card above the threshold.
+      [],
+    );
+    // Both are "salty" (present in the dataset)...
+    expect(withGC.saltyCardCount).toBe(2);
+    // ...but only the 1.0 card is "notably salty" (>= 1.0 threshold), so the
+    // rationale mentions exactly 1 card above the threshold.
+    expect(
+      withGC.bracketRationale.some((r) => /1 card above the "salty" threshold/.test(r)),
+    ).toBe(true);
+  });
 });
