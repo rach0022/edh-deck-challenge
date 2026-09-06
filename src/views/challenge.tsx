@@ -15,15 +15,6 @@ interface ChallengePageProps {
   cached: boolean;
 }
 
-const CATEGORY_LABELS: Record<SlotCategory, string> = {
-  colorless: 'Colorless',
-  mono: 'Mono Color',
-  'two-color': 'Two Color (Guilds)',
-  'three-color': 'Three Color (Shards & Wedges)',
-  'four-color': 'Four Color',
-  'five-color': 'Five Color',
-};
-
 const CATEGORY_ORDER: SlotCategory[] = [
   'colorless',
   'mono',
@@ -41,32 +32,28 @@ function artCropUrl(setCode: string, collectorNumber: string): string {
   return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=art_crop`;
 }
 
+/**
+ * A single roster tile for the 32-deck challenge — styled like a fighting-game
+ * character-select slot. Filled slots show the commander art (colour, glowing);
+ * empty slots show a "hidden character" placeholder (a big ? silhouette) like
+ * an unlocked-fighter slot.
+ */
 function SlotCard({ slot }: { slot: ColorSlot }) {
   const filled = slot.decks.length > 0;
   const deckCount = slot.decks.length;
-  const isSplit = deckCount === 2;
-  const isMulti = deckCount > 2;
+  // Any slot with 2+ decks cycles through them one at a time with a periodic
+  // fade in / fade out (no more diagonal split for the 2-deck case).
+  const isMulti = deckCount > 1;
 
-  // For 3+ decks, each deck gets equal time in the fade animation cycle
+  // Each deck gets equal time in the fade animation cycle.
   const cycleDuration = deckCount * 4; // 4 seconds per deck
 
   return (
-    <div class={`slot-card ${filled ? 'filled' : 'empty'} ${isSplit ? 'slot-card-split' : ''}`}>
+    <div class={`roster-slot ${filled ? 'filled' : 'empty'}`}>
       {filled && slot.decks.map((deck, index) => {
         const commander = deck.commanders[0];
         const hasArt = commander?.setCode && commander?.collectorNumber;
         if (!hasArt) return null;
-
-        // Two-deck slots: diagonal split (no animation).
-        // The first deck fills the top-left half, the second the bottom-right.
-        if (isSplit) {
-          return (
-            <div
-              class={`slot-art slot-art-split slot-art-split-${index === 0 ? 'left' : 'right'}`}
-              style={`background-image: url('${artCropUrl(commander.setCode, commander.collectorNumber)}')`}
-            />
-          );
-        }
 
         return (
           <div
@@ -81,29 +68,30 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
         );
       })}
 
-      {isSplit && <span class="slot-split-divider" />}
-
-      {(isSplit || isMulti) && (
-        <span class="multi-deck-badge">{deckCount} decks</span>
+      {/* Hidden-character placeholder for empty color identities. */}
+      {!filled && (
+        <div class="roster-slot-locked" aria-hidden="true">
+          <span class="roster-locked-mark">?</span>
+        </div>
       )}
 
       {filled && (() => {
         const totalCombos = slot.decks.reduce((sum, d) => sum + (d.comboCount ?? 0), 0);
         return totalCombos > 0 ? (
-          <span class="combo-count-badge">♾️ {totalCombos} combo{totalCombos > 1 ? 's' : ''}</span>
+          <span class="combo-count-badge">♾️ {totalCombos}</span>
         ) : null;
       })()}
 
-      <div class="slot-content">
+      <div class="roster-slot-content">
         <div class="slot-colors">
           {slot.colors.map((color) => (
-            <img src={manaSymbolUrl(color)} alt={color} width="18" height="18" />
+            <img src={manaSymbolUrl(color)} alt={color} width="16" height="16" />
           ))}
         </div>
-        <div class="slot-name">{slot.name}</div>
+        <div class="roster-slot-name">{slot.name}</div>
 
         {filled ? (
-          <div class={isMulti ? 'deck-info-carousel' : isSplit ? 'deck-info-split' : ''}>
+          <div class={isMulti ? 'deck-info-carousel' : ''}>
             {slot.decks.map((deck, index) => (
               <div
                 class={`deck-info ${isMulti ? 'deck-info-cycle' : ''}`}
@@ -116,21 +104,20 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
                 <div class="commander-name">
                   {deck.commanderNames.join(' & ')}
                 </div>
-                <div class="deck-name">{deck.deckName}</div>
                 {deck.deckId && (
                   <a
                     href={`/deck/${deck.deckId}`}
                     class="slot-link"
                     aria-label={`View details for ${deck.deckName}`}
                   >
-                    View details →
+                    View →
                   </a>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div class="empty-label">Empty slot</div>
+          <div class="empty-label">Locked</div>
         )}
       </div>
     </div>
@@ -140,14 +127,11 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
 export function ChallengePage({ challenge, cached }: ChallengePageProps) {
   const { username, progress, summary } = challenge;
 
-  // Group slots by category
-  const slotsByCategory = new Map<SlotCategory, ColorSlot[]>();
-  for (const category of CATEGORY_ORDER) {
-    slotsByCategory.set(
-      category,
-      progress.slots.filter((s) => s.category === category)
-    );
-  }
+  // Order all 32 slots by category (colorless → five-color) into one flat
+  // roster, so they render as a continuous fighting-select grid (8 per row).
+  const orderedSlots: ColorSlot[] = CATEGORY_ORDER.flatMap((category) =>
+    progress.slots.filter((s) => s.category === category),
+  );
 
   return (
     <Layout title={`${username} — Necro Nerds`}>
@@ -170,26 +154,15 @@ export function ChallengePage({ challenge, cached }: ChallengePageProps) {
         </div>
       </div>
 
-      {CATEGORY_ORDER.map((category) => {
-        const slots = slotsByCategory.get(category)!;
-        const categoryCount = summary.categoryCounts[category];
-        return (
-          <div class="category-section">
-            <h2 class="category-header">
-              {CATEGORY_LABELS[category]}
-              <span class="count"> — {categoryCount.filled}/{categoryCount.total}</span>
-            </h2>
-            <div class="slots-grid">
-              {slots.map((slot) => (
-                <SlotCard slot={slot} />
-              ))}
-            </div>
-          </div>
-        );
-      })}
+      {/* One continuous roster: 32 slots, 8 per row (4 rows). */}
+      <div class="roster-grid roster-grid-challenge">
+        {orderedSlots.map((slot) => (
+          <SlotCard slot={slot} />
+        ))}
+      </div>
 
       {progress.skippedDecks.length > 0 && (
-        <div class="category-section">
+        <div class="category-section" style="margin-top: 3rem;">
           <h2 class="category-header">Skipped Decks</h2>
           <ul style="list-style: none; padding: 0;">
             {progress.skippedDecks.map((deck) => (

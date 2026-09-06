@@ -1652,6 +1652,161 @@ const css = `
     margin-top: 1.5rem;
   }
 
+  /* ─── 32-Deck Challenge Roster (Character Select) ─── */
+
+  /*
+    One continuous fighting-select roster: 8 tiles per row, 4 rows for the 32
+    color-identity slots. Sized to fit on screen without horizontal scroll.
+  */
+  .roster-grid-challenge {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    /* No gaps at all — tiles butt together edge-to-edge in both directions,
+       forming a continuous character-select mosaic. */
+    gap: 0;
+    margin-bottom: 3rem;
+  }
+
+  @media (max-width: 1200px) {
+    .roster-grid-challenge { grid-template-columns: repeat(6, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .roster-grid-challenge { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .roster-grid-challenge { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .roster-slot {
+    position: relative;
+    /* Portrait tiles — bigger than the old cards but 4 rows still fit. */
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    background: var(--bg-surface);
+    transition: transform 0.15s, border-color 0.25s, box-shadow 0.25s;
+    contain: layout paint style;
+  }
+
+  .roster-slot:hover {
+    transform: translateY(-3px) scale(1.02);
+    z-index: 3;
+  }
+
+  /* Filled = active fighter: coloured art + soft green glow. */
+  .roster-slot.filled {
+    border-color: var(--filled-border);
+    box-shadow:
+      inset 0 0 16px rgba(52, 211, 153, 0.18),
+      0 0 10px rgba(52, 211, 153, 0.15);
+  }
+
+  .roster-slot.filled:hover {
+    box-shadow:
+      inset 0 0 18px rgba(52, 211, 153, 0.28),
+      0 6px 22px rgba(52, 211, 153, 0.28);
+  }
+
+  /* Empty = locked / hidden character slot. */
+  .roster-slot.empty {
+    background:
+      repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.015) 0px,
+        rgba(255, 255, 255, 0.015) 10px,
+        rgba(255, 255, 255, 0.04) 10px,
+        rgba(255, 255, 255, 0.04) 20px
+      ),
+      #0c0c16;
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .roster-slot.empty:hover {
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+
+  /* The "hidden character" placeholder — a big silhouetted question mark. */
+  .roster-slot-locked {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 0;
+  }
+
+  .roster-locked-mark {
+    font-size: 3.5rem;
+    font-weight: 900;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.08);
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    /* Silhouette feel: no fill glow, just a dim embossed glyph. */
+    user-select: none;
+  }
+
+  .roster-slot-content {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 0.55rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.15rem;
+  }
+
+  .roster-slot-name {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.15;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.8);
+  }
+
+  .roster-slot.empty .roster-slot-name {
+    color: var(--text-secondary);
+  }
+
+  /* Tighten the reused deck-info bits inside the smaller roster tiles. */
+  .roster-slot .commander-name {
+    font-size: 0.72rem;
+    line-height: 1.15;
+  }
+
+  .roster-slot .slot-link {
+    font-size: 0.68rem;
+    margin-top: 0.1rem;
+  }
+
+  .roster-slot .slot-colors {
+    margin-bottom: 0.3rem;
+  }
+
+  .roster-slot .slot-colors img {
+    width: 15px;
+    height: 15px;
+  }
+
+  .roster-slot .empty-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+  }
+
+  /* Combo badge sits bottom-right on the roster tiles. */
+  .roster-slot .combo-count-badge {
+    top: auto;
+    left: auto;
+    bottom: 6px;
+    right: 6px;
+    padding: 2px 6px;
+    font-size: 0.6rem;
+  }
+
   /* ─── Build a cEDH Deck Page ─────────────── */
 
   .cedh-matches {
