@@ -1336,6 +1336,322 @@ const css = `
     line-height: 1.6;
   }
 
+  /* ─── Home: Deck Picker Toggle ──────────── */
+
+  .deck-picker-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-top: 0.5rem;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .deck-picker-toggle:hover {
+    border-color: rgba(168, 85, 247, 0.4);
+    background: var(--glass-hover);
+  }
+
+  .deck-picker-toggle input[type="checkbox"] {
+    margin-top: 0.2rem;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-purple);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .deck-picker-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .deck-picker-hint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* ─── Deck Select (Smash-style Roster) ──── */
+
+  .cselect {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .cselect-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .cselect-title {
+    font-size: 2.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.75rem;
+  }
+
+  .cselect-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .cselect-subtitle strong {
+    color: var(--accent-green);
+  }
+
+  .cselect-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .cselect-count {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .cselect-actions {
+    display: flex;
+    gap: 1.25rem;
+  }
+
+  .cselect-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent-purple);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .cselect-link:hover {
+    color: #c78af9;
+  }
+
+  /*
+    The roster: a gapless mosaic of square portrait tiles that populates from
+    the centre. Flexbox (not grid) so a partial final row stays centered rather
+    than left-aligned. No outer frame around the whole roster.
+  */
+  .cselect-roster {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0;
+    /* 6 X tile width — forces a max of 6 fighters per row. */
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .fighter {
+    position: relative;
+    display: block;
+    /* Slightly larger tiles; exactly 6 fit within the 1032px roster cap. */
+    flex: 0 0 172px;
+    width: 172px;
+    aspect-ratio: 1 / 1;
+    cursor: pointer;
+    outline: none;
+    background: #0a0a12;
+    transition: transform 0.12s, z-index 0s;
+  }
+
+  @media (max-width: 1080px) {
+    /* 4 per row on mid widths. */
+    .cselect-roster { max-width: 640px; }
+    .fighter { flex-basis: 160px; width: 160px; }
+  }
+  @media (max-width: 700px) {
+    /* 3 per row on small tablets. */
+    .cselect-roster { max-width: 408px; }
+    .fighter { flex-basis: 136px; width: 136px; }
+  }
+  @media (max-width: 440px) {
+    /* 2 per row on phones. */
+    .cselect-roster { max-width: 240px; }
+    .fighter { flex-basis: 120px; width: 120px; }
+  }
+
+  .fighter-checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .fighter-art {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 28%;
+    /* Deselected fighters are greyed out and dimmed. */
+    filter: grayscale(1) brightness(0.45) contrast(0.9);
+    transition: filter 0.2s, transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fighter-noart {
+    font-size: 2rem;
+    opacity: 0.4;
+  }
+
+  .fighter-art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(5, 5, 10, 0) 45%,
+      rgba(5, 5, 10, 0.85) 100%
+    );
+  }
+
+  /* Soft selection glow — no hard border, just a gentle lit look when picked. */
+  .fighter-cursor {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    box-shadow: none;
+    transition: box-shadow 0.2s;
+  }
+
+  .fighter-banner {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    padding: 0.35rem 0.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+  }
+
+  .fighter-name {
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.15;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.9);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .fighter-deck {
+    color: #9fe6c8;
+    font-size: 0.66rem;
+    font-style: italic;
+    line-height: 1.1;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Hover: lift the fighter slightly above the roster plane. */
+  .fighter:hover {
+    transform: scale(1.06);
+    z-index: 4;
+  }
+
+  .fighter:hover .fighter-cursor {
+    box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.18);
+  }
+
+  /* Selected state: full-colour portrait + light green glow (no hard border). */
+  .fighter.selected .fighter-art {
+    filter: grayscale(0) brightness(1) contrast(1);
+  }
+
+  .fighter.selected .fighter-cursor {
+    box-shadow:
+      inset 0 0 22px rgba(52, 211, 153, 0.28),
+      0 0 12px rgba(52, 211, 153, 0.25);
+  }
+
+  .fighter.selected {
+    z-index: 3;
+  }
+
+  /* Keyboard focus ring for accessibility. */
+  .fighter-checkbox:focus-visible ~ .fighter-cursor {
+    box-shadow: inset 0 0 0 2px rgba(168, 85, 247, 0.8);
+  }
+
+  .cselect-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .cselect-go {
+    padding: 0.95rem 2.25rem;
+    border-radius: 50px;
+    border: none;
+    background: var(--accent-gradient);
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.3s;
+  }
+
+  .cselect-go:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 28px rgba(168, 85, 247, 0.45);
+  }
+
+  .cselect-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary);
+  }
+
+  .cselect-empty form {
+    margin-top: 1.5rem;
+  }
+
   /* ─── Build a cEDH Deck Page ─────────────── */
 
   .cedh-matches {

@@ -26,6 +26,9 @@ import type { CommanderSelection } from '../types.js';
 /** The path prefix for the Build-a-Commander loading page. */
 const BUILD_LOADING_PREFIX = '/build/loading';
 
+/** The path prefix for the Build-a-Commander deck-selection page. */
+const BUILD_SELECT_PREFIX = '/build/select';
+
 /** User-facing prompts shown when a required build input is missing. */
 export const USERNAME_REQUIRED_PROMPT = 'Please enter a Moxfield username.';
 export const COMMANDER_REQUIRED_PROMPT = 'Please select a commander.';
@@ -137,4 +140,58 @@ export function buildDispatchUrl(
   if (companion) params.set('companion', companion);
 
   return `${BUILD_LOADING_PREFIX}/${encodeURIComponent(username)}?${params.toString()}`;
+}
+
+/**
+ * Builds the selection query string shared by every hop of the build flow:
+ * `commander=…&partner=…&companion=…` (commander always present; partner and
+ * companion emitted only when set). Extracted so the deck-select and
+ * loading/results URL builders stay in sync with `buildDispatchUrl`.
+ */
+export function buildSelectionParams(
+  selection: CommanderSelection,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set('commander', selection.commander);
+  const partner = cleanOptional(selection.partner);
+  if (partner) params.set('partner', partner);
+  const companion = cleanOptional(selection.companion);
+  if (companion) params.set('companion', companion);
+  return params;
+}
+
+/**
+ * Builds the deck-selection redirect URL for a username and selection:
+ * `/build/select/<username>?commander=…&partner=…&companion=…`.
+ *
+ * Used when the user opts into "let me pick which decks" on the home form: the
+ * commander selection is carried through so that, after the user chooses their
+ * decks, the flow can continue to the loading page with the same selection
+ * plus the chosen `deck` params.
+ */
+export function buildSelectUrl(
+  username: string,
+  selection: CommanderSelection,
+): string {
+  const params = buildSelectionParams(selection);
+  return `${BUILD_SELECT_PREFIX}/${encodeURIComponent(username)}?${params.toString()}`;
+}
+
+/**
+ * Normalizes the raw `deck` query parameter(s) into a clean list of Moxfield
+ * deck publicIds. Hono returns a single string for one value and an array for
+ * repeated `deck=` params; this accepts either (or `undefined`) and trims,
+ * drops empties, and de-duplicates while preserving first-seen order.
+ *
+ * Returns `undefined` when no `deck` param was present at all, so callers can
+ * distinguish "no deck selection made" (use all decks) from "picked no decks"
+ * (empty array → empty owned set).
+ */
+export function parseDeckIds(
+  raw: string | string[] | undefined,
+): string[] | undefined {
+  if (raw === undefined) return undefined;
+  const list = Array.isArray(raw) ? raw : [raw];
+  const cleaned = list.map((id) => id.trim()).filter((id) => id.length > 0);
+  return Array.from(new Set(cleaned));
 }

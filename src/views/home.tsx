@@ -135,6 +135,28 @@ export function HomePage() {
                   />
                 </div>
               </div>
+
+              {/*
+                Opt-in deck picker. When checked, the build submission is routed
+                to the deck-selection ("character select") screen first, so the
+                user can choose which of their commander decks seed the owned
+                collection. The `name` is toggled by the inline script so it's
+                only submitted in build mode.
+              */}
+              <label class="deck-picker-toggle">
+                <input
+                  type="checkbox"
+                  id="select-decks-input"
+                  data-build-name="selectDecks"
+                />
+                <span class="deck-picker-label">
+                  Let me pick which decks to include
+                  <span class="deck-picker-hint">
+                    Choose specific decks to seed your collection instead of all
+                    of them — e.g. only your Knights deck.
+                  </span>
+                </span>
+              </label>
             </fieldset>
           </form>
           <p class="search-hint">

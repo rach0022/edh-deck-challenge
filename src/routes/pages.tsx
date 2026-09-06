@@ -27,6 +27,7 @@ import { HomePage } from '../views/home.js';
 import { ChallengePage } from '../views/challenge.js';
 import { CedhMatchPage } from '../views/cedh-match.js';
 import { BuildPage } from '../views/build.js';
+import { DeckSelectPage } from '../views/deck-select.js';
 import { DeckDetailPage } from '../views/deck-detail.js';
 import { DeckAnalysisPage } from '../views/deck-analysis.js';
 import { LoadingPage } from '../views/loading.js';
@@ -38,6 +39,8 @@ import {
 import {
   validateBuildRequest,
   buildDispatchUrl,
+  buildSelectUrl,
+  parseDeckIds,
 } from '../domain/build-dispatch.js';
 import type { CommanderSelection } from '../types.js';
 
@@ -59,11 +62,25 @@ export function createPageRoutes(
    * route (task 17.3) reads back (Req 9.4). Optional fields absent from the
    * selection are omitted rather than emitted as empty parameters.
    */
-  function buildResultsUrl(username: string, selection: CommanderSelection): string {
+  function buildResultsUrl(
+    username: string,
+    selection: CommanderSelection,
+    deckIds?: readonly string[],
+  ): string {
     const params = new URLSearchParams();
     params.set('commander', selection.commander);
     if (selection.partner) params.set('partner', selection.partner);
     if (selection.companion) params.set('companion', selection.companion);
+    // Carry the deck selection forward so the results/refresh URLs reconstruct
+    // the same owned-collection scope (and hit the same cache entry). Omitted
+    // entirely when no deck selection was made (all-decks flow).
+    if (deckIds !== undefined) {
+      if (deckIds.length === 0) {
+        params.append('deck', '');
+      } else {
+        for (const id of deckIds) params.append('deck', id);
+      }
+    }
     return `/build/${encodeURIComponent(username)}?${params.toString()}`;
   }
 
@@ -103,6 +120,11 @@ export function createPageRoutes(
       });
       if (!result.valid) {
         return c.redirect('/');
+      }
+      // "Let me pick which decks" → route through the deck-selection screen
+      // first; otherwise go straight to the all-decks loading page (Req 2.6).
+      if (c.req.query('selectDecks') === 'on') {
+        return c.redirect(buildSelectUrl(result.username, result.selection));
       }
       return c.redirect(buildDispatchUrl(result.username, result.selection));
     }
@@ -362,8 +384,190 @@ export function createPageRoutes(
         commander={result.selection.commander}
         partner={result.selection.partner}
         companion={result.selection.companion}
+        deckIds={parseDeckIds(c.req.queries('deck'))}
       />,
     );
+  });
+
+  /**
+   * GET /build/select/:username?commander=&partner=&companion= — Deck-selection
+   * ("character select") loading screen for the Build-a-Commander flow.
+   *
+   * Reached when the user opts into "let me pick which decks" on the home form.
+   * It validates the commander selection, then renders a loading shell (mode
+   * 'build-select') that SSE-streams the user's deck list via
+   * `/api/build/:username/decks` and, on completion, redirects to the deck grid
+   * at `/build/decks/:username`.
+   */
+  app.get('/build/select/:username', (c) => {
+    const result = validateBuildRequest({
+      username: c.req.param('username') ?? '',
+      commander: c.req.query('commander') ?? '',
+      partner: c.req.query('partner') ?? null,
+      companion: c.req.query('companion') ?? null,
+    });
+
+    if (!result.valid) {
+      const message =
+        result.field === 'username'
+          ? 'Username must be between 2 and 50 characters.'
+          : 'Please select a commander to build.';
+      return c.html(
+        <ErrorPage title="Invalid Build Request" message={message} />,
+        400,
+      );
+    }
+
+    const { username } = result;
+    if (username.length < 2 || username.length > 50) {
+      return c.html(
+        <ErrorPage
+          title="Invalid Username"
+          message="Username must be between 2 and 50 characters."
+        />,
+        400,
+      );
+    }
+
+    return c.html(
+      <LoadingPage
+        username={username}
+        mode="build-select"
+        commander={result.selection.commander}
+        partner={result.selection.partner}
+        companion={result.selection.companion}
+      />,
+    );
+  });
+
+  /**
+   * GET /api/build/:username/decks?commander=&partner=&companion= — SSE stream
+   * that loads the user's selectable commander decks for the deck-selection
+   * screen. Forwards `getDeckList` progress as `progress` events and, on
+   * finish, emits a `complete` event redirecting to the deck grid
+   * (`/build/decks/:username?…`). Errors map to the same typed events as the
+   * build SSE route.
+   */
+  app.get('/api/build/:username/decks', (c) => {
+    const validation = validateBuildRequest({
+      username: c.req.param('username') ?? '',
+      commander: c.req.query('commander') ?? '',
+      partner: c.req.query('partner') ?? null,
+      companion: c.req.query('companion') ?? null,
+    });
+
+    if (!validation.valid) {
+      return c.json({ error: validation.message }, 400);
+    }
+
+    const { username, selection } = validation;
+    const selectParams = new URLSearchParams();
+    selectParams.set('commander', selection.commander);
+    if (selection.partner) selectParams.set('partner', selection.partner);
+    if (selection.companion) selectParams.set('companion', selection.companion);
+    const redirect = `/build/decks/${encodeURIComponent(username)}?${selectParams.toString()}`;
+
+    return streamSSE(c, async (stream) => {
+      let completed = false;
+      try {
+        await buildCommanderService.getDeckList(
+          username,
+          (event: ProgressEvent) => {
+            if (completed) return;
+            stream.writeSSE({ event: 'progress', data: JSON.stringify(event) });
+          },
+        );
+
+        completed = true;
+        await stream.writeSSE({
+          event: 'complete',
+          data: JSON.stringify({ redirect }),
+        });
+      } catch (error) {
+        completed = true;
+        let errorMessage = 'An unexpected error occurred.';
+        let errorType = 'unknown';
+
+        if (error instanceof MoxfieldUserNotFoundError) {
+          errorMessage = `Moxfield user "${username}" was not found.`;
+          errorType = 'not_found';
+        } else if (error instanceof MoxfieldTimeoutError) {
+          errorMessage = 'Could not reach Moxfield. Please try again.';
+          errorType = 'timeout';
+        } else {
+          console.error('Build deck-list SSE progress error:', error);
+        }
+
+        await stream.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ message: errorMessage, type: errorType }),
+        });
+      }
+    });
+  });
+
+  /**
+   * GET /build/decks/:username?commander=&partner=&companion= — Deck grid page.
+   *
+   * Reads the user's selectable deck list (warmed by the deck-list SSE run) and
+   * renders the character-select grid. Submitting the grid form continues to
+   * `/build/loading/:username` with the same commander selection plus one
+   * `deck=<publicId>` param per selected deck.
+   */
+  app.get('/build/decks/:username', async (c) => {
+    const result = validateBuildRequest({
+      username: c.req.param('username') ?? '',
+      commander: c.req.query('commander') ?? '',
+      partner: c.req.query('partner') ?? null,
+      companion: c.req.query('companion') ?? null,
+    });
+
+    if (!result.valid) {
+      const message =
+        result.field === 'username'
+          ? 'Username must be between 2 and 50 characters.'
+          : 'Please select a commander to build.';
+      return c.html(
+        <ErrorPage title="Invalid Build Request" message={message} />,
+        400,
+      );
+    }
+
+    const { username, selection } = result;
+
+    try {
+      const { data } = await buildCommanderService.getDeckList(username);
+      return c.html(
+        <DeckSelectPage username={username} selection={selection} decks={data.decks} />,
+      );
+    } catch (error) {
+      if (error instanceof MoxfieldUserNotFoundError) {
+        return c.html(
+          <ErrorPage
+            title="User Not Found"
+            message={`Moxfield user "${username}" was not found. Check the spelling and try again.`}
+          />,
+          404,
+        );
+      }
+      if (error instanceof MoxfieldTimeoutError) {
+        return c.html(
+          <ErrorPage
+            title="Connection Timeout"
+            message="Could not reach Moxfield. The service may be temporarily unavailable. Please try again in a few minutes."
+          />,
+          504,
+        );
+      }
+      console.error('Build deck-select page render error:', error);
+      return c.html(
+        <ErrorPage
+          title="Something Went Wrong"
+          message="An unexpected error occurred. Please try again later."
+        />,
+        500,
+      );
+    }
   });
 
   /**
@@ -502,6 +706,7 @@ export function createPageRoutes(
     }
 
     const { username, selection } = validation;
+    const deckIds = parseDeckIds(c.req.queries('deck'));
 
     return streamSSE(c, async (stream) => {
       let completed = false;
@@ -513,12 +718,13 @@ export function createPageRoutes(
             if (completed) return;
             stream.writeSSE({ event: 'progress', data: JSON.stringify(event) });
           },
+          deckIds,
         );
 
         completed = true;
         await stream.writeSSE({
           event: 'complete',
-          data: JSON.stringify({ redirect: buildResultsUrl(username, selection) }),
+          data: JSON.stringify({ redirect: buildResultsUrl(username, selection, deckIds) }),
         });
       } catch (error) {
         completed = true;
@@ -590,11 +796,14 @@ export function createPageRoutes(
     }
 
     const { username, selection } = result;
+    const deckIds = parseDeckIds(c.req.queries('deck'));
 
     try {
       const { data, cached } = await buildCommanderService.getResult(
         selection,
         username,
+        undefined,
+        deckIds,
       );
 
       return c.html(<BuildPage result={data} cached={cached} />);
@@ -668,12 +877,13 @@ export function createPageRoutes(
     }
 
     const { username, selection } = result;
+    const deckIds = parseDeckIds(c.req.queries('deck'));
     try {
-      await buildCommanderService.refreshResult(selection, username);
+      await buildCommanderService.refreshResult(selection, username, deckIds);
     } catch (error) {
       console.error('Build refresh error:', error);
     }
-    return c.redirect(buildResultsUrl(username, selection));
+    return c.redirect(buildResultsUrl(username, selection, deckIds));
   });
 
   /**

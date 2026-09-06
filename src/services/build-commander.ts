@@ -48,7 +48,7 @@ import { resolveColorIdentity } from '../domain/color-identity.js';
 import { normalizeCardName } from '../domain/deck-similarity.js';
 import { computeBuyListTotalCad, priceCards } from '../domain/build-commander-pricing.js';
 import { buildSections } from '../domain/build-commander-sections.js';
-import { buildCacheKey } from '../domain/selection-key.js';
+import { buildCacheKey, deckListCacheKey } from '../domain/selection-key.js';
 import { classifyCardType } from '../domain/card-type.js';
 import type {
   BuildCommanderCard,
@@ -57,6 +57,8 @@ import type {
   CommanderImage,
   CommanderImageRole,
   CommanderSelection,
+  DeckListResult,
+  SelectableDeck,
 } from '../types.js';
 
 export interface BuildCommanderService {
@@ -64,11 +66,28 @@ export interface BuildCommanderService {
     selection: CommanderSelection,
     username: string,
     onProgress?: ProgressCallback,
+    /**
+     * When supplied, restrict the owned collection to only these Moxfield deck
+     * publicIds (the user's picks from the deck-selection screen). An empty
+     * array means "no decks selected" → an empty owned set. `undefined` means
+     * "no selection was made" → use all of the user's decks (the default).
+     */
+    selectedDeckIds?: readonly string[],
   ): Promise<{ data: BuildCommanderResponse; cached: boolean }>;
   refreshResult(
     selection: CommanderSelection,
     username: string,
+    selectedDeckIds?: readonly string[],
   ): Promise<BuildCommanderResponse>;
+  /**
+   * Loads the user's commander decks reduced to the selection-screen
+   * projection (publicId + name + commander printings). Cached under the
+   * deck-list key so re-entering the flow is instant.
+   */
+  getDeckList(
+    username: string,
+    onProgress?: ProgressCallback,
+  ): Promise<{ data: DeckListResult; cached: boolean }>;
 }
 
 /**
@@ -83,6 +102,20 @@ function printingImageUrl(
 ): string | null {
   if (!setCode || !collectorNumber) return null;
   return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=normal`;
+}
+
+/**
+ * Builds a Scryfall "art_crop" (frameless, text-less character art) URL from a
+ * set code + collector number, or null when either is missing. Used by the
+ * fighting-game-style deck picker so tiles show portrait art rather than the
+ * full card frame.
+ */
+function printingArtCropUrl(
+  setCode: string | undefined,
+  collectorNumber: string | undefined,
+): string | null {
+  if (!setCode || !collectorNumber) return null;
+  return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=art_crop`;
 }
 
 export function createBuildCommanderService(  config: AppConfig,
@@ -216,23 +249,36 @@ export function createBuildCommanderService(  config: AppConfig,
   async function loadUserDecks(
     username: string,
     emit: ProgressCallback,
+    selectedDeckIds?: readonly string[],
   ): Promise<UserDeckCards[]> {
     emit({ phase: 'connecting', message: 'Connecting to Moxfield...', progress: 5 });
     const summaries = await moxfield.fetchUserDecks(username);
+
+    // When the user picked specific decks on the selection screen, only load
+    // those. An empty (but defined) selection means the user explicitly chose
+    // no decks → load nothing (empty owned set). `undefined` = load all decks.
+    const selectedSet =
+      selectedDeckIds === undefined ? null : new Set(selectedDeckIds);
+    const chosen = selectedSet
+      ? summaries.filter((s) => selectedSet.has(s.publicId))
+      : summaries;
+
     emit({
       phase: 'connected',
-      message: `Found ${summaries.length} decks`,
+      message: `Found ${chosen.length} decks`,
       progress: 15,
-      detail: `${summaries.length} commander decks found`,
+      detail: selectedSet
+        ? `${chosen.length} of ${summaries.length} decks selected`
+        : `${summaries.length} commander decks found`,
     });
 
     const decks: UserDeckCards[] = [];
-    for (let i = 0; i < summaries.length; i++) {
-      const summary = summaries[i];
-      const progress = 15 + Math.round(((i + 1) / Math.max(summaries.length, 1)) * 45);
+    for (let i = 0; i < chosen.length; i++) {
+      const summary = chosen[i];
+      const progress = 15 + Math.round(((i + 1) / Math.max(chosen.length, 1)) * 45);
       emit({
         phase: 'loading-decks',
-        message: `Loading deck ${i + 1} of ${summaries.length}`,
+        message: `Loading deck ${i + 1} of ${chosen.length}`,
         progress,
         detail: summary.name,
       });
@@ -266,12 +312,13 @@ export function createBuildCommanderService(  config: AppConfig,
     selection: CommanderSelection,
     username: string,
     onProgress?: ProgressCallback,
+    selectedDeckIds?: readonly string[],
   ): Promise<BuildCommanderResponse> {
     const emit = onProgress ?? (() => {});
 
     // 1. Fetch the user's decks and build the owned set + source-deck index.
     //    No decks → empty owned set, everything is to-buy (Req 12.5).
-    const decks = await loadUserDecks(username, emit);
+    const decks = await loadUserDecks(username, emit, selectedDeckIds);
     const noDecks = decks.length === 0;
     const index = buildOwnedCardIndex(decks);
 
@@ -380,8 +427,8 @@ export function createBuildCommanderService(  config: AppConfig,
   }
 
   return {
-    async getResult(selection, username, onProgress) {
-      const key = buildCacheKey(username, selection);
+    async getResult(selection, username, onProgress, selectedDeckIds) {
+      const key = buildCacheKey(username, selection, selectedDeckIds);
 
       // Cache hit → return without touching Moxfield/EDHREC (Req 11.2).
       onProgress?.({ phase: 'cache-check', message: 'Checking cache...', progress: 2 });
@@ -392,20 +439,88 @@ export function createBuildCommanderService(  config: AppConfig,
       }
 
       // Cache miss — build fresh and cache under the TTL (Req 11.1, 11.3).
-      const data = await fetchAndBuild(selection, username, onProgress);
+      const data = await fetchAndBuild(selection, username, onProgress, selectedDeckIds);
       await cache.set(key, data, config.cacheTtlSeconds);
       onProgress?.({ phase: 'complete', message: 'Done!', progress: 100 });
       return { data, cached: false };
     },
 
-    async refreshResult(selection, username) {
+    async refreshResult(selection, username, selectedDeckIds) {
       // Force a recompute: delete the cached result, rebuild, and re-cache
       // (Req 11.4).
-      const key = buildCacheKey(username, selection);
+      const key = buildCacheKey(username, selection, selectedDeckIds);
       await cache.delete(key);
-      const data = await fetchAndBuild(selection, username);
+      const data = await fetchAndBuild(selection, username, undefined, selectedDeckIds);
       await cache.set(key, data, config.cacheTtlSeconds);
       return data;
+    },
+
+    async getDeckList(username, onProgress) {
+      const key = deckListCacheKey(username);
+      const emit = onProgress ?? (() => {});
+
+      emit({ phase: 'cache-check', message: 'Checking cache...', progress: 2 });
+      const cached = await cache.get<DeckListResult>(key);
+      if (cached) {
+        emit({ phase: 'complete', message: 'Loaded from cache!', progress: 100 });
+        return { data: cached, cached: true };
+      }
+
+      // Fetch the user's decks and reduce each to the selection-screen
+      // projection: publicId + name + commander name(s)/image(s). Mirrors
+      // loadUserDecks' fetch pattern but keeps only what the picker needs.
+      emit({ phase: 'connecting', message: 'Connecting to Moxfield...', progress: 5 });
+      const summaries = await moxfield.fetchUserDecks(username);
+      emit({
+        phase: 'connected',
+        message: `Found ${summaries.length} decks`,
+        progress: 15,
+        detail: `${summaries.length} commander decks found`,
+      });
+
+      const decks: SelectableDeck[] = [];
+      for (let i = 0; i < summaries.length; i++) {
+        const summary = summaries[i];
+        const progress =
+          15 + Math.round(((i + 1) / Math.max(summaries.length, 1)) * 80);
+        emit({
+          phase: 'loading-decks',
+          message: `Loading deck ${i + 1} of ${summaries.length}`,
+          progress,
+          detail: summary.name,
+        });
+
+        const detail = await moxfield.fetchDeckDetail(summary.publicId);
+        const extraction = extractCommanders(detail);
+        const colorIdentity = resolveColorIdentity(
+          extraction.commanders.map((c) => ({ colorIdentity: c.colorIdentity })),
+        );
+        decks.push({
+          publicId: detail.publicId,
+          name: detail.name,
+          colorIdentity,
+          commanders: extraction.commanders.map((c) => ({
+            name: c.name,
+            imageUrl:
+              c.imageUrl ?? printingImageUrl(c.setCode, c.collectorNumber),
+            artCrop:
+              c.artCrop ?? printingArtCropUrl(c.setCode, c.collectorNumber),
+          })),
+        });
+      }
+
+      // Sort by number of colors in the deck's identity (colorless/mono first,
+      // up to five-color), then alphabetically by name for a stable order.
+      decks.sort((a, b) => {
+        const byColors = a.colorIdentity.length - b.colorIdentity.length;
+        if (byColors !== 0) return byColors;
+        return a.name.localeCompare(b.name);
+      });
+
+      const data: DeckListResult = { username, decks };
+      await cache.set(key, data, config.cacheTtlSeconds);
+      emit({ phase: 'complete', message: 'Done!', progress: 100 });
+      return { data, cached: false };
     },
   };
 }

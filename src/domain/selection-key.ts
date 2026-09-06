@@ -58,15 +58,52 @@ export function selectionKey(selection: CommanderSelection): string {
 /**
  * Builds the Build-a-Commander result cache key for a username + selection.
  *
- * Format: `edh:build:<username>:<selectionKey>`, lowercased per the app-wide
- * cache-key convention. The username is normalized (trimmed, whitespace
- * collapsed, lowercased) so usernames differing only by case or surrounding
- * whitespace resolve to the same cached result.
+ * Format: `edh:build:<username>:<selectionKey>[:<deckSelectionKey>]`,
+ * lowercased per the app-wide cache-key convention. The username is normalized
+ * (trimmed, whitespace collapsed, lowercased) so usernames differing only by
+ * case or surrounding whitespace resolve to the same cached result.
+ *
+ * When `selectedDeckIds` is supplied, a deterministic (sorted, de-duplicated)
+ * component derived from the chosen Moxfield deck publicIds is appended so a
+ * build seeded from a subset of decks doesn't collide with the all-decks build
+ * or with a build from a different subset. `undefined` (no deck selection made
+ * — the default all-decks flow) appends nothing, preserving the original key
+ * so existing cached results still hit.
  */
 export function buildCacheKey(
   username: string,
   selection: CommanderSelection,
+  selectedDeckIds?: readonly string[],
 ): string {
   const normalizedUsername = username.trim().replace(/\s+/g, ' ').toLowerCase();
-  return `edh:build:${normalizedUsername}:${selectionKey(selection)}`;
+  const base = `edh:build:${normalizedUsername}:${selectionKey(selection)}`;
+  if (selectedDeckIds === undefined) return base;
+  return `${base}:${deckSelectionKey(selectedDeckIds)}`;
+}
+
+/**
+ * Builds a deterministic, order-independent key component for a set of chosen
+ * Moxfield deck publicIds. Ids are trimmed, lowercased, de-duplicated, and
+ * sorted so the same set of decks always yields the same component regardless
+ * of the order they were submitted in. An empty selection yields the sentinel
+ * `none` so "explicitly picked no decks" is distinguishable from a populated
+ * selection.
+ */
+export function deckSelectionKey(deckIds: readonly string[]): string {
+  const normalized = Array.from(
+    new Set(deckIds.map((id) => id.trim().toLowerCase()).filter(Boolean)),
+  ).sort();
+  return normalized.length > 0 ? `decks:${normalized.join(',')}` : 'decks:none';
+}
+
+/**
+ * Builds the cache key for a user's selectable deck list (the projection shown
+ * on the deck-selection screen). Format: `edh:decklist:<username>`, with the
+ * username normalized the same way as the build key.
+ */
+export function deckListCacheKey(username: string): string {
+  const normalizedUsername = username.trim().replace(/\s+/g, ' ').toLowerCase();
+  // Version suffix (v3) so entries cached before art_crop portraits + color
+  // identity were added don't collide — old entries lacked those fields.
+  return `edh:decklist:v3:${normalizedUsername}`;
 }

@@ -81,6 +81,7 @@ export interface MoxfieldCardFace {
   image_uris?: {
     normal?: string;
     large?: string;
+    art_crop?: string;
   };
 }
 
@@ -471,6 +472,45 @@ export interface CommanderSelection {
   partner: string | null;
   /** Optional companion. */
   companion: string | null;
+}
+
+/**
+ * A single one of the user's commander decks, reduced to just what the
+ * deck-selection ("character select") screen needs to render a selectable
+ * card: the deck's Moxfield publicId (used as the selection key), its display
+ * name, and the deck's commander name(s) + printing image(s). This is a
+ * lightweight projection built from the deck detail before the full
+ * Build-a-Commander pipeline runs, so the user can pick which decks seed the
+ * owned collection.
+ */
+export interface SelectableDeck {
+  /** Moxfield public id — the stable key used to select/deselect the deck. */
+  publicId: string;
+  /** The deck's display name. */
+  name: string;
+  /**
+   * The deck's combined WUBRG color identity (union across its commanders).
+   * Used to sort the selection screen by number of colors.
+   */
+  colorIdentity: Color[];
+  /**
+   * The deck's commander(s), each with the exact printing image the user runs
+   * (or null when Moxfield had no inline image and no set/collector number).
+   * Rendered as the card art on the selection screen.
+   */
+  commanders: {
+    name: string;
+    /** Full card image (normal) — fallback when art_crop is unavailable. */
+    imageUrl: string | null;
+    /** Cropped, frameless character-portrait art for the roster tile. */
+    artCrop: string | null;
+  }[];
+}
+
+/** The result of loading a user's selectable commander decks. */
+export interface DeckListResult {
+  username: string;
+  decks: SelectableDeck[];
 }
 
 /** A single recommended card from EDHREC (raw, pre-ownership). */

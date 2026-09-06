@@ -9,17 +9,23 @@ import { Layout } from './layout.js';
 interface LoadingPageProps {
   username: string;
   /** Which flow this loading screen feeds into. Defaults to 'challenge'. */
-  mode?: 'challenge' | 'cedh' | 'build';
-  /** Selected primary commander — required when mode='build'. */
+  mode?: 'challenge' | 'cedh' | 'build' | 'build-select';
+  /** Selected primary commander — required when mode='build'/'build-select'. */
   commander?: string;
   /** Optional partner commander (build mode). */
   partner?: string | null;
   /** Optional companion (build mode). */
   companion?: string | null;
+  /**
+   * Selected Moxfield deck publicIds to carry through the build flow. Only
+   * meaningful for mode='build'. `undefined` = all decks (no selection made);
+   * an empty array = an explicit "no decks" pick.
+   */
+  deckIds?: readonly string[];
 }
 
 /** Phase rows shown for each mode. id must match a phaseMap target below. */
-const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build', { id: string; label: string }[]> = {
+const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build' | 'build-select', { id: string; label: string }[]> = {
   challenge: [
     { id: 'phase-connecting', label: 'Connect to Moxfield' },
     { id: 'phase-loading-decks', label: 'Load deck data' },
@@ -39,32 +45,51 @@ const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build', { id: string; label: st
     { id: 'phase-matching', label: 'Fetch recommendations' },
     { id: 'phase-complete', label: 'Finalize results' },
   ],
+  'build-select': [
+    { id: 'phase-connecting', label: 'Connect to Moxfield' },
+    { id: 'phase-loading-decks', label: 'Load your decks' },
+    { id: 'phase-complete', label: 'Ready to choose' },
+  ],
 };
 
 /**
- * Builds the `?commander=…&partner=…&companion=…` query string for the
- * build-flow SSE + redirect URLs. Mirrors the routes' construction
- * (commander always present; partner/companion emitted only when set).
+ * Builds the `?commander=…&partner=…&companion=…[&deck=…]` query string for the
+ * build-flow SSE + redirect URLs. Mirrors the routes' construction (commander
+ * always present; partner/companion emitted only when set; one `deck` param per
+ * selected deck id, or a single empty `deck` for an explicit no-decks pick).
  */
 function buildSelectionQuery(
   commander: string,
   partner?: string | null,
   companion?: string | null,
+  deckIds?: readonly string[],
 ): string {
   const params = new URLSearchParams();
   params.set('commander', commander);
   if (partner) params.set('partner', partner);
   if (companion) params.set('companion', companion);
+  if (deckIds !== undefined) {
+    if (deckIds.length === 0) {
+      params.append('deck', '');
+    } else {
+      for (const id of deckIds) params.append('deck', id);
+    }
+  }
   return params.toString();
 }
 
-export function LoadingPage({ username, mode = 'challenge', commander = '', partner = null, companion = null }: LoadingPageProps) {
+export function LoadingPage({ username, mode = 'challenge', commander = '', partner = null, companion = null, deckIds }: LoadingPageProps) {
   let sseUrl: string;
   let redirectUrl: string;
   if (mode === 'build') {
-    const query = buildSelectionQuery(commander, partner, companion);
+    const query = buildSelectionQuery(commander, partner, companion, deckIds);
     sseUrl = `/api/build/${encodeURIComponent(username)}/progress?${query}`;
     redirectUrl = `/build/${encodeURIComponent(username)}?${query}`;
+  } else if (mode === 'build-select') {
+    // Deck-selection loading: stream the deck list, then land on the grid.
+    const query = buildSelectionQuery(commander, partner, companion);
+    sseUrl = `/api/build/${encodeURIComponent(username)}/decks?${query}`;
+    redirectUrl = `/build/decks/${encodeURIComponent(username)}?${query}`;
   } else if (mode === 'cedh') {
     sseUrl = `/api/cedh/${encodeURIComponent(username)}/progress`;
     redirectUrl = `/cedh/${encodeURIComponent(username)}`;
@@ -76,9 +101,11 @@ export function LoadingPage({ username, mode = 'challenge', commander = '', part
   const title =
     mode === 'build'
       ? `Loading ${username} — Build a Commander`
-      : mode === 'cedh'
-        ? `Loading ${username} — Build a cEDH Deck`
-        : `Loading ${username} — Necro Nerds`;
+      : mode === 'build-select'
+        ? `Loading ${username} — Choose Your Decks`
+        : mode === 'cedh'
+          ? `Loading ${username} — Build a cEDH Deck`
+          : `Loading ${username} — Necro Nerds`;
 
   const phaseRows = PHASE_ROWS[mode];
 
