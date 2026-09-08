@@ -28,6 +28,8 @@ import {
   buildAutocompleteCacheKey,
   buildCheapestPrintingQueryParam,
   buildCheapestPrintingCacheKey,
+  buildLegalCommanderQueryParam,
+  buildLegalCommanderCacheKey,
   meetsMinimumLength,
   type Legality,
 } from '../domain/scryfall-query.js';
@@ -113,6 +115,15 @@ export interface ScryfallService {
    * than throwing so a corpus build can proceed.
    */
   getCheapestUsdByName(cardName: string): Promise<number | null>;
+  /**
+   * Given a set of exact card names, returns the subset that are legal
+   * commanders (Scryfall `is:commander legal:commander`), each resolved to a
+   * `CardSuggestion` (name, image, color identity, ids). Results are cached
+   * per card name (including the "not a commander" outcome). A Scryfall outage
+   * for an individual card degrades to "not a commander" rather than throwing,
+   * so a partial result is still returned.
+   */
+  findLegalCommanders(cardNames: readonly string[]): Promise<CardSuggestion[]>;
 }
 
 // ─── Scryfall API response shapes (only the fields we consume) ───────────────
@@ -444,6 +455,71 @@ export function createScryfallService(
 
       await cache.set(cacheKey, { usd }, config.cacheTtlSeconds);
       return usd;
+    },
+
+    /**
+     * Resolves which of the given exact card names are legal commanders. Each
+     * name is checked with a `!"name" is:commander legal:commander` search:
+     * a match returns the printing as a `CardSuggestion`; a 404 (no match)
+     * caches a null sentinel meaning "not a legal commander". Lookups are
+     * de-duplicated by normalized name and served from cache where possible.
+     * A Scryfall outage for one card degrades that card to "not a commander"
+     * (no cache write) rather than failing the whole batch.
+     */
+    async findLegalCommanders(cardNames: readonly string[]): Promise<CardSuggestion[]> {
+      // De-duplicate by lowercased name so a card listed twice is checked once.
+      const seen = new Set<string>();
+      const unique: string[] = [];
+      for (const raw of cardNames) {
+        const name = typeof raw === 'string' ? raw.trim() : '';
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(name);
+      }
+
+      const commanders: CardSuggestion[] = [];
+      for (const name of unique) {
+        const cacheKey = buildLegalCommanderCacheKey(name);
+        // A stored `null` means a cached "not a legal commander" outcome; an
+        // absent entry (cached === null) means we haven't checked yet.
+        const cached = await cache.get<CardSuggestion | null>(cacheKey);
+        if (cached !== null) {
+          if (cached) commanders.push(cached);
+          continue;
+        }
+
+        const q = buildLegalCommanderQueryParam(name);
+        const url = `${config.scryfallBaseUrl}/cards/search?q=${q}`;
+        try {
+          const { status, body } = await scryfallGet(url);
+          if (status === 404) {
+            // Definitively not a legal commander — cache the negative.
+            await cache.set(cacheKey, null, config.cacheTtlSeconds);
+            continue;
+          }
+          if (status < 200 || status >= 300) {
+            // Unexpected status: skip without poisoning the cache.
+            console.error(`Scryfall legal-commander check returned HTTP ${status}.`);
+            continue;
+          }
+          const data = (body as ScryfallSearchResponse | null)?.data ?? [];
+          if (data.length === 0) {
+            await cache.set(cacheKey, null, config.cacheTtlSeconds);
+            continue;
+          }
+          const suggestion = toSuggestion(data[0]);
+          await cache.set(cacheKey, suggestion, config.cacheTtlSeconds);
+          commanders.push(suggestion);
+        } catch {
+          // Scryfall unavailable for this card — degrade to "not a commander"
+          // without caching so a later run can re-check.
+          continue;
+        }
+      }
+
+      return commanders;
     },
 
     async getCardsByIds(ids: string[]): Promise<Map<string, CardDetails>> {

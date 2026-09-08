@@ -134,7 +134,7 @@ export function ChallengePage({ challenge, cached }: ChallengePageProps) {
   );
 
   return (
-    <Layout title={`${username} — Necro Nerds`}>
+    <Layout title={`${username} — The Command Crypt`}>
       <div class="progress-section">
         <h1>{username}'s Challenge</h1>
         <div class="progress-bar-container">

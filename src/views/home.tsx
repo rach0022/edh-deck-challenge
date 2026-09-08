@@ -6,9 +6,9 @@ import { Layout } from './layout.js';
 
 export function HomePage() {
   return (
-    <Layout title="Necro Nerds — EDH Deck Tools">
+    <Layout title="The Command Crypt — EDH Deck Tools">
       <div class="hero">
-        <h1>🃏 Necro Nerds</h1>
+        <h1>🃏 The Command Crypt</h1>
 
         <p class="hero-subtitle">
           Track your progress toward building a Commander deck for every color

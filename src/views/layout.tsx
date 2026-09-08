@@ -45,8 +45,8 @@ export function Layout({ title, children }: LayoutProps) {
         <div class="bg-glow bg-glow-3" aria-hidden="true" />
         <header>
           <div class="header-inner">
-            <a href="/" class="logo" aria-label="Necro Nerds home">
-              <span aria-hidden="true">🃏</span> Necro Nerds
+            <a href="/" class="logo" aria-label="The Command Crypt home">
+              <span aria-hidden="true">🃏</span> The Command Crypt
             </a>
             <nav aria-label="Primary">
               <a href="/" class="nav-link">Home</a>
@@ -643,7 +643,8 @@ const css = `
   /* ─── Deck Detail Page ──────────────────── */
 
   .deck-header {
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
+    text-align: center;
   }
 
   .deck-header h1 {
@@ -653,23 +654,60 @@ const css = `
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
   }
 
   .deck-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.85rem;
     color: var(--text-secondary);
     font-size: 1rem;
+  }
+
+  /* Dot separators between meta items (replaces the old " • " text nodes). */
+  .deck-meta > * + *::before {
+    content: '•';
+    color: var(--text-muted);
+    margin-right: 0.85rem;
+  }
+
+  .deck-meta-colors {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .deck-meta-colors img { display: block; }
+
+  .deck-meta-cached {
+    color: var(--text-muted);
+    font-size: 0.8rem;
   }
 
   .deck-meta a {
     color: var(--accent-green);
   }
 
+  /* Deck action buttons are centered under the header. */
+  .deck-header .deck-actions {
+    justify-content: center;
+  }
+
   .commanders-display {
     display: flex;
     gap: 2rem;
     flex-wrap: wrap;
+    justify-content: center;
     margin-bottom: 3rem;
+  }
+
+  /* Commander section heading, centered above the commander card(s). */
+  .deck-commanders-heading {
+    color: #ccc;
+    text-align: center;
+    margin-bottom: 1rem;
   }
 
   .commander-card {
@@ -2508,6 +2546,138 @@ const css = `
     font-style: italic;
     margin-bottom: 0.5rem;
   }
+
+  /* ─── Deck action buttons (deck-detail header) ───────────── */
+
+  .deck-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+  .deck-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.7rem 1.35rem;
+    border-radius: 50px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: transform 0.2s, box-shadow 0.3s, background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .deck-action-btn:hover {
+    transform: translateY(-2px);
+    text-decoration: none;
+  }
+  /* Primary (gradient) — the headline action. */
+  .deck-action-btn.primary {
+    background: var(--accent-gradient);
+    color: #fff;
+  }
+  .deck-action-btn.primary:hover {
+    color: #fff;
+    box-shadow: 0 6px 24px rgba(168, 85, 247, 0.35);
+  }
+  /* Secondary (outlined glass) — the alternate action. */
+  .deck-action-btn.secondary {
+    background: var(--glass);
+    border-color: var(--glass-border);
+    color: var(--text-secondary);
+  }
+  .deck-action-btn.secondary:hover {
+    border-color: var(--accent-purple);
+    color: #fff;
+    box-shadow: 0 6px 24px rgba(168, 85, 247, 0.2);
+  }
+
+  /* Small outlined button (e.g. Refresh). */
+  .secondary-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .secondary-button:hover {
+    border-color: var(--accent-purple);
+    color: #fff;
+  }
+
+  /* ─── Find a Commander page ──────────────────────────────── */
+
+  .find-commander-candidate { padding-top: 1.25rem; }
+  .find-commander-rank {
+    flex: 0 0 auto;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--accent-green, #34d399);
+    font-variant-numeric: tabular-nums;
+  }
+  .find-commander-combo-flag {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    align-self: center;
+  }
+  .find-commander-body { margin-top: 0.5rem; }
+  .find-commander-header {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  /* Image + its "View on Scryfall" link stack together, left of the stats. */
+  .find-commander-art-col {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 220px;
+  }
+  .find-commander-art {
+    width: 220px;
+    aspect-ratio: 626 / 457; /* Scryfall art_crop proportions */
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    display: block;
+  }
+  .find-commander-art-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #3a3a5a;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+  .find-commander-scryfall-link {
+    font-size: 0.85rem;
+    color: var(--accent-green);
+  }
+  .find-commander-stats { flex: 1 1 300px; min-width: 260px; }
+  .find-commander-stats .build-summary { margin-bottom: 0.5rem; }
+  .find-commander-links { font-size: 0.85rem; margin: 0.25rem 0 0; }
 
   /* Owned cards: image gallery grouped by type */
   .build-owned-groups {

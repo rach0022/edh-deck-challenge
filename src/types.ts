@@ -822,3 +822,73 @@ export interface DeckAnalysisResponse {
   /** True when EDHREC had no data for this commander (analysis degraded). */
   noEdhrecData: boolean;
 }
+
+
+// ─── Find a Commander feature types ─────────────────────────────────────────
+
+/**
+ * A single card in the user's deck that EDHREC recommends for a candidate
+ * commander — i.e. a card that "supports" that commander. Carries the EDHREC
+ * synergy/inclusion metrics so the decklist can show how on-theme the card is.
+ */
+export interface CommanderSupportCard {
+  name: string;
+  scryfallId: string | null;
+  /** Canonical card type (Creature/Artifact/…): used to group the decklist. */
+  cardType: string;
+  /** EDHREC synergy for this card under the candidate commander (~-0.2..0.3). */
+  synergy: number | null;
+  /** EDHREC inclusion fraction for this card under the candidate commander. */
+  inclusion: number | null;
+  /** The EDHREC panel this card came from (e.g. "High Synergy Cards"). */
+  category: string;
+}
+
+/**
+ * A candidate commander found inside the user's deck (a legal commander card
+ * the deck already contains), scored by how well the deck's other cards
+ * support it per EDHREC.
+ */
+export interface CommanderCandidate {
+  name: string;
+  scryfallId: string | null;
+  /** Card image (normal) for the candidate's header tile; null if unknown. */
+  imageUrl: string | null;
+  /** WUBRG color identity of the candidate commander. */
+  colorIdentity: Color[];
+  /** The candidate's overall EDHREC rank (1 = most played), or null. */
+  edhrecRank: number | null;
+  /** How many EDHREC decks run this commander, or null. */
+  edhrecNumDecks: number | null;
+  /**
+   * How many of the deck's cards EDHREC recommends for this commander
+   * (the "support" count) — the primary ranking signal.
+   */
+  supportCount: number;
+  /**
+   * Sum of the (positive) synergy of the supporting cards — a tie-breaker and
+   * a rough measure of how *strongly* the deck supports this commander.
+   */
+  synergyScore: number;
+  /** True when this commander is part of a combo present in the deck. */
+  inCombo: boolean;
+  /** Combos in the deck that this commander participates in (produces text). */
+  comboFeatures: string[];
+  /** The blended ranking score (support + synergy + combo boost). */
+  score: number;
+  /** True when EDHREC had no page for this commander (support is empty). */
+  noEdhrecData: boolean;
+  /** The deck's supporting cards for this commander, grouped by type, best first. */
+  supportCards: CommanderSupportCard[];
+}
+
+/** Full response for the find-a-commander page (`GET /find-commander/:deckId`). */
+export interface FindCommanderResponse {
+  deckId: string;
+  deckName: string;
+  moxfieldUrl: string;
+  /** Total number of cards in the deck that were scanned. */
+  scannedCardCount: number;
+  /** Candidate commanders, best first. */
+  candidates: CommanderCandidate[];
+}

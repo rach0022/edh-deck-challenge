@@ -19,6 +19,7 @@ import type { ScryfallService } from '../services/scryfall.js';
 import { ScryfallUnavailableError } from '../services/scryfall.js';
 import type { BuildCommanderService } from '../services/build-commander.js';
 import type { DeckAnalysisService } from '../services/deck-analysis.js';
+import type { CommanderFinderService } from '../services/commander-finder.js';
 import {
   EdhrecNotFoundError,
   EdhrecTimeoutError,
@@ -30,6 +31,7 @@ import { BuildPage } from '../views/build.js';
 import { DeckSelectPage } from '../views/deck-select.js';
 import { DeckDetailPage } from '../views/deck-detail.js';
 import { DeckAnalysisPage } from '../views/deck-analysis.js';
+import { FindCommanderPage } from '../views/find-commander.js';
 import { LoadingPage } from '../views/loading.js';
 import { ErrorPage } from '../views/error.js';
 import {
@@ -50,6 +52,7 @@ export function createPageRoutes(
   scryfallService: ScryfallService,
   buildCommanderService: BuildCommanderService,
   deckAnalysisService: DeckAnalysisService,
+  commanderFinderService: CommanderFinderService,
 ): Hono {
   const app = new Hono();
 
@@ -319,6 +322,142 @@ export function createPageRoutes(
       console.error('Deck analysis refresh error:', error);
     }
     return c.redirect(`/analyze/${encodeURIComponent(deckId)}`);
+  });
+
+  /**
+   * GET /find-commander/:deckId — Find-a-Commander page. Scans the deck for
+   * legal commanders (Scryfall `is:commander legal:commander`), runs EDHREC for
+   * each, and ranks them by how many of the deck's cards support them (plus a
+   * combo boost). Individual EDHREC misses are non-fatal (that candidate
+   * degrades to no-data), so the page renders unless the deck itself can't be
+   * loaded.
+   */
+  app.get('/find-commander/:deckId', async (c) => {
+    const deckId = c.req.param('deckId').trim();
+
+    if (!deckId) {
+      return c.html(
+        <ErrorPage title="Invalid Deck" message="Deck ID is required." />,
+        400,
+      );
+    }
+
+    try {
+      const { data, cached } = await commanderFinderService.getSuggestions(deckId);
+      return c.html(<FindCommanderPage result={data} cached={cached} />);
+    } catch (error) {
+      if (error instanceof MoxfieldUserNotFoundError) {
+        return c.html(
+          <ErrorPage title="Deck Not Found" message="This deck could not be found." />,
+          404,
+        );
+      }
+      if (error instanceof MoxfieldTimeoutError) {
+        return c.html(
+          <ErrorPage
+            title="Connection Timeout"
+            message="Could not reach Moxfield. The service may be temporarily unavailable. Please try again in a few minutes."
+          />,
+          504,
+        );
+      }
+      console.error('Find-a-commander error:', error);
+      return c.html(
+        <ErrorPage
+          title="Something Went Wrong"
+          message="An unexpected error occurred finding commanders for this deck."
+        />,
+        500,
+      );
+    }
+  });
+
+  /**
+   * POST /find-commander/refresh/:deckId — Force-refresh the commander
+   * suggestions, then redirect back to the find-a-commander page.
+   */
+  app.post('/find-commander/refresh/:deckId', async (c) => {
+    const deckId = c.req.param('deckId').trim();
+    if (!deckId) {
+      return c.redirect('/');
+    }
+    try {
+      await commanderFinderService.refreshSuggestions(deckId);
+    } catch (error) {
+      console.error('Find-a-commander refresh error:', error);
+    }
+    return c.redirect(`/find-commander/${encodeURIComponent(deckId)}`);
+  });
+
+  /**
+   * GET /find-commander/loading/:deckId?name=… — Loading shell for the
+   * find-a-commander flow. Renders the SSE-driven progress page which streams
+   * `/api/find-commander/:deckId/progress` and, on completion, redirects to the
+   * results page. The optional `name` query param is the deck's display name,
+   * shown in the loading heading.
+   */
+  app.get('/find-commander/loading/:deckId', (c) => {
+    const deckId = c.req.param('deckId').trim();
+    if (!deckId) {
+      return c.html(
+        <ErrorPage title="Invalid Deck" message="Deck ID is required." />,
+        400,
+      );
+    }
+    const deckName = c.req.query('name')?.trim() ?? '';
+    return c.html(
+      <LoadingPage username="" mode="find-commander" deckId={deckId} deckName={deckName} />,
+    );
+  });
+
+  /**
+   * GET /api/find-commander/:deckId/progress — SSE stream for the
+   * find-a-commander flow. Forwards `getSuggestions` progress as `progress`
+   * events (each naming the commander being analysed) and emits a `complete`
+   * event redirecting to the results page. Errors map to the same typed events
+   * as the other SSE routes.
+   */
+  app.get('/api/find-commander/:deckId/progress', (c) => {
+    const deckId = c.req.param('deckId').trim();
+    if (!deckId) {
+      return c.json({ error: 'Invalid deck id' }, 400);
+    }
+    const redirect = `/find-commander/${encodeURIComponent(deckId)}`;
+
+    return streamSSE(c, async (stream) => {
+      let completed = false;
+      try {
+        await commanderFinderService.getSuggestions(deckId, (event: ProgressEvent) => {
+          if (completed) return;
+          stream.writeSSE({ event: 'progress', data: JSON.stringify(event) });
+        });
+
+        completed = true;
+        await stream.writeSSE({
+          event: 'complete',
+          data: JSON.stringify({ redirect }),
+        });
+      } catch (error) {
+        completed = true;
+        let errorMessage = 'An unexpected error occurred.';
+        let errorType = 'unknown';
+
+        if (error instanceof MoxfieldUserNotFoundError) {
+          errorMessage = 'This deck could not be found.';
+          errorType = 'not_found';
+        } else if (error instanceof MoxfieldTimeoutError) {
+          errorMessage = 'Could not reach Moxfield. Please try again.';
+          errorType = 'timeout';
+        } else {
+          console.error('Find-a-commander SSE progress error:', error);
+        }
+
+        await stream.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ message: errorMessage, type: errorType }),
+        });
+      }
+    });
   });
 
   /**

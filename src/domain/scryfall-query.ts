@@ -116,3 +116,31 @@ export function buildCheapestPrintingQueryParam(cardName: string): string {
 export function buildCheapestPrintingCacheKey(cardName: string): string {
   return `edh:scryfall:cheapest:${normalizeQuery(cardName)}`;
 }
+
+/**
+ * Builds the raw (un-encoded) Scryfall query that matches an exact card name
+ * ONLY when that card is a legal commander, e.g.
+ * `!"Krenko, Mob Boss" is:commander legal:commander`.
+ *
+ * `!"…"` is the exact-name operator, `is:commander` restricts to cards that
+ * can be a commander, and `legal:commander` requires format legality. A card
+ * that isn't a legal commander produces zero results (a 404 from the search
+ * endpoint), which the caller reads as "not a legal commander".
+ */
+export function buildLegalCommanderQuery(cardName: string): string {
+  const safe = cardName.trim().replace(/"/g, '\\"');
+  return `!"${safe}" is:commander legal:commander`;
+}
+
+/** URL-encoded value for the legal-commander search `q` parameter. */
+export function buildLegalCommanderQueryParam(cardName: string): string {
+  return encodeURIComponent(buildLegalCommanderQuery(cardName));
+}
+
+/**
+ * Deterministic cache key for a "is this card a legal commander?" lookup,
+ * keyed by the lowercased, whitespace-normalized card name.
+ */
+export function buildLegalCommanderCacheKey(cardName: string): string {
+  return `edh:scryfall:iscommander:${normalizeQuery(cardName)}`;
+}

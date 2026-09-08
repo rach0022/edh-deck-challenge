@@ -1,4 +1,4 @@
-# 🃏 Necro Nerds — EDH Deck Tools
+# 🃏 The Command Crypt — EDH Deck Tools
 
 A full-stack [Hono](https://hono.dev) application that serves both a server-side rendered web UI and a JSON REST API for a set of Magic: The Gathering Commander (EDH) deck tools. Enter a Moxfield username (or pick a commander) and get:
 
@@ -35,7 +35,7 @@ No auth. No database. No sign-up. Just enter a username and go.
 
 ## Feature Architecture
 
-Necro Nerds is built from three features that share a common set of services. Each service is either **I/O + orchestration** (`src/services/`) or **pure business logic** (`src/domain/`). The diagrams below show, per feature, which services back it and how they connect.
+The Command Crypt is built from three features that share a common set of services. Each service is either **I/O + orchestration** (`src/services/`) or **pure business logic** (`src/domain/`). The diagrams below show, per feature, which services back it and how they connect.
 
 Two services are shared connective tissue across every feature:
 
