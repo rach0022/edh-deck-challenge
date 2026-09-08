@@ -282,7 +282,13 @@ function buildDeckDetailResponse(deck: MoxfieldDeckDetail): DeckDetailResponse {
     colorIdentityKey: key,
     colorSlotName: slotDef?.name ?? 'Unknown',
     moxfieldUrl: `https://moxfield.com/decks/${deck.publicId}`,
-    cardCount: Object.values(deck.mainboard).reduce((sum, e) => sum + e.quantity, 0),
+    // Total = command zone + mainboard. Moxfield stores the commander(s)
+    // separately from the mainboard, so a 100-card Commander deck has 99
+    // mainboard entries + 1 commander; summing only the mainboard undercounts
+    // by the number of commanders (showing 99 instead of 100).
+    cardCount:
+      Object.values(deck.commanders ?? {}).reduce((sum, e) => sum + e.quantity, 0) +
+      Object.values(deck.mainboard).reduce((sum, e) => sum + e.quantity, 0),
     cardsByType,
   };
 }

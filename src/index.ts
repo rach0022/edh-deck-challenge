@@ -33,6 +33,7 @@ import { createScryfallService } from './services/scryfall.js';
 import { createEdhrecService } from './services/edhrec.js';
 import { createBuildCommanderService } from './services/build-commander.js';
 import { createDeckAnalysisService } from './services/deck-analysis.js';
+import { createCommanderFinderService } from './services/commander-finder.js';
 import { createChallengeRoutes } from './routes/challenge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createPageRoutes } from './routes/pages.js';
@@ -63,6 +64,14 @@ const deckAnalysisService = createDeckAnalysisService(
   cache,
   moxfield,
   edhrecService,
+);
+const commanderFinderService = createCommanderFinderService(
+  config,
+  cache,
+  moxfield,
+  scryfallService,
+  edhrecService,
+  spellbook,
 );
 
 // ─── Create Hono app ────────────────────────────────────────────────────────
@@ -100,7 +109,7 @@ app.get('/favicon.ico', (c) => {
 
 app.route(
   '/',
-  createPageRoutes(challengeService, cedhService, scryfallService, buildCommanderService, deckAnalysisService),
+  createPageRoutes(challengeService, cedhService, scryfallService, buildCommanderService, deckAnalysisService, commanderFinderService),
 );
 
 // 404 fallback
@@ -124,7 +133,7 @@ const cacheDriverLabel = {
 } as const;
 
 console.log(`
-🃏 Necro Nerds API
+🃏 The Command Crypt API
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Port:        ${config.port}
   Environment: ${config.nodeEnv}

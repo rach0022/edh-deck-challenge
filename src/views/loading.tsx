@@ -9,7 +9,7 @@ import { Layout } from './layout.js';
 interface LoadingPageProps {
   username: string;
   /** Which flow this loading screen feeds into. Defaults to 'challenge'. */
-  mode?: 'challenge' | 'cedh' | 'build' | 'build-select';
+  mode?: 'challenge' | 'cedh' | 'build' | 'build-select' | 'find-commander';
   /** Selected primary commander — required when mode='build'/'build-select'. */
   commander?: string;
   /** Optional partner commander (build mode). */
@@ -22,10 +22,17 @@ interface LoadingPageProps {
    * an empty array = an explicit "no decks" pick.
    */
   deckIds?: readonly string[];
+  /**
+   * Moxfield deck publicId — required when mode='find-commander'. Drives the
+   * find-a-commander SSE stream and the redirect to the results page.
+   */
+  deckId?: string;
+  /** Deck display name, shown in the find-commander loading heading. */
+  deckName?: string;
 }
 
 /** Phase rows shown for each mode. id must match a phaseMap target below. */
-const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build' | 'build-select', { id: string; label: string }[]> = {
+const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build' | 'build-select' | 'find-commander', { id: string; label: string }[]> = {
   challenge: [
     { id: 'phase-connecting', label: 'Connect to Moxfield' },
     { id: 'phase-loading-decks', label: 'Load deck data' },
@@ -49,6 +56,13 @@ const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build' | 'build-select', { id: 
     { id: 'phase-connecting', label: 'Connect to Moxfield' },
     { id: 'phase-loading-decks', label: 'Load your decks' },
     { id: 'phase-complete', label: 'Ready to choose' },
+  ],
+  'find-commander': [
+    { id: 'phase-connecting', label: 'Load deck from Moxfield' },
+    { id: 'phase-loading-decks', label: 'Find legal commanders (Scryfall)' },
+    { id: 'phase-combos', label: 'Detect combos' },
+    { id: 'phase-matching', label: 'Analyse commanders on EDHREC' },
+    { id: 'phase-complete', label: 'Rank results' },
   ],
 };
 
@@ -78,7 +92,7 @@ function buildSelectionQuery(
   return params.toString();
 }
 
-export function LoadingPage({ username, mode = 'challenge', commander = '', partner = null, companion = null, deckIds }: LoadingPageProps) {
+export function LoadingPage({ username, mode = 'challenge', commander = '', partner = null, companion = null, deckIds, deckId = '', deckName = '' }: LoadingPageProps) {
   let sseUrl: string;
   let redirectUrl: string;
   if (mode === 'build') {
@@ -90,6 +104,9 @@ export function LoadingPage({ username, mode = 'challenge', commander = '', part
     const query = buildSelectionQuery(commander, partner, companion);
     sseUrl = `/api/build/${encodeURIComponent(username)}/decks?${query}`;
     redirectUrl = `/build/decks/${encodeURIComponent(username)}?${query}`;
+  } else if (mode === 'find-commander') {
+    sseUrl = `/api/find-commander/${encodeURIComponent(deckId)}/progress`;
+    redirectUrl = `/find-commander/${encodeURIComponent(deckId)}`;
   } else if (mode === 'cedh') {
     sseUrl = `/api/cedh/${encodeURIComponent(username)}/progress`;
     redirectUrl = `/cedh/${encodeURIComponent(username)}`;
@@ -103,11 +120,23 @@ export function LoadingPage({ username, mode = 'challenge', commander = '', part
       ? `Loading ${username} — Build a Commander`
       : mode === 'build-select'
         ? `Loading ${username} — Choose Your Decks`
-        : mode === 'cedh'
-          ? `Loading ${username} — Build a cEDH Deck`
-          : `Loading ${username} — Necro Nerds`;
+        : mode === 'find-commander'
+          ? `Finding commanders — ${deckName || 'The Command Crypt'}`
+          : mode === 'cedh'
+            ? `Loading ${username} — Build a cEDH Deck`
+            : `Loading ${username} — The Command Crypt`;
+
+  const heading =
+    mode === 'find-commander'
+      ? `Finding Commanders${deckName ? ` in ${deckName}` : ''}`
+      : `Loading ${username}'s Decks`;
 
   const phaseRows = PHASE_ROWS[mode];
+
+  const hint =
+    mode === 'find-commander'
+      ? "We scan your deck for legal commanders, then ask EDHREC how well your cards support each one. First run takes ~15–40s; results are cached for 15 minutes."
+      : 'First lookup takes 10-30 seconds while we fetch your decks from Moxfield. Subsequent visits will be instant (cached for 15 minutes).';
 
   return (
     <Layout title={title}>
@@ -116,7 +145,7 @@ export function LoadingPage({ username, mode = 'challenge', commander = '', part
           <div class="loading-spinner" />
         </div>
 
-        <h1 class="loading-title">Loading {username}'s Decks</h1>
+        <h1 class="loading-title">{heading}</h1>
 
         <div class="loading-progress-container">
           <div class="loading-progress-bar" id="progress-bar" style="width: 0%"
@@ -125,7 +154,7 @@ export function LoadingPage({ username, mode = 'challenge', commander = '', part
         </div>
         <div class="loading-progress-text" id="progress-text">0%</div>
 
-        <div class="loading-status" id="status-message" aria-live="polite">Preparing to connect to Moxfield</div>
+        <div class="loading-status" id="status-message" aria-live="polite">Preparing…</div>
         <div class="loading-detail" id="status-detail" aria-live="polite"></div>
 
         <div class="loading-phases" id="phases-list">
@@ -137,10 +166,7 @@ export function LoadingPage({ username, mode = 'challenge', commander = '', part
           ))}
         </div>
 
-        <p class="loading-hint">
-          First lookup takes 10-30 seconds while we fetch your decks from Moxfield.
-          <br />Subsequent visits will be instant (cached for 15 minutes).
-        </p>
+        <p class="loading-hint">{hint}</p>
       </div>
 
       <script dangerouslySetInnerHTML={{ __html: loadingScript(sseUrl, redirectUrl, phaseRows.map((r) => r.id)) }} />

@@ -243,6 +243,11 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
   const hasPotential = !!(deck.combos && deck.combos.potentialCards.length > 0);
   const hasDecklist = deck.cardsByType.length > 0;
 
+  // The Decklist section lists only the mainboard (the commander is shown in
+  // its own section above), so its label reflects the mainboard total rather
+  // than the full deck count (which includes the commander).
+  const decklistCount = deck.cardsByType.reduce((sum, g) => sum + g.count, 0);
+
   // Build the in-page nav from whichever sections are present.
   const navItems: SideNavItem[] = [
     { id: 'section-commanders', label: `Commander${deck.commanders.length > 1 ? 's' : ''}` },
@@ -261,40 +266,45 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
     navItems.push({
       id: 'section-decklist',
       label: 'Decklist',
-      meta: String(deck.cardCount),
+      meta: String(decklistCount),
     });
   }
 
   return (
-    <Layout title={`${deck.name} — Necro Nerds`}>
-      <div class="deck-header">
-        <h1>{deck.name}</h1>
-        <div class="deck-meta">
-          <span style="display: inline-flex; align-items: center; gap: 4px; margin-right: 1rem;">
-            {colors.map((color) => (
-              <img src={manaSymbolUrl(color)} alt={color} width="18" height="18" />
-            ))}
-            {colors.length === 0 && <span>Colorless</span>}
-          </span>
-          <span>{deck.colorSlotName}</span>
-          {' • '}
-          <span>{deck.cardCount} cards</span>
-          {' • '}
-          <a href={deck.moxfieldUrl} target="_blank" rel="noopener">
-            View on Moxfield ↗
-          </a>
-          {' • '}
-          <a href={`/analyze/${encodeURIComponent(deck.id)}`}>
-            🧪 Analyze deck
-          </a>
-          {cached && <span style="margin-left: 1rem; color: var(--text-muted); font-size: 0.8rem;">(cached)</span>}
-        </div>
-      </div>
-
+    <Layout title={`${deck.name} — The Command Crypt`}>
       <div class="page-with-sidenav">
         <SideNav items={navItems} />
         <div class="page-with-sidenav-content">
-          <h2 id="section-commanders" style="color: #ccc; margin-bottom: 1rem;">
+          <div class="deck-header">
+            <h1>{deck.name}</h1>
+            <div class="deck-meta">
+              <span class="deck-meta-colors">
+                {colors.map((color) => (
+                  <img src={manaSymbolUrl(color)} alt={color} width="18" height="18" />
+                ))}
+                {colors.length === 0 && <span>Colorless</span>}
+              </span>
+              <span>{deck.colorSlotName}</span>
+              <span>{deck.cardCount} cards</span>
+              <a href={deck.moxfieldUrl} target="_blank" rel="noopener">
+                View on Moxfield ↗
+              </a>
+              {cached && <span class="deck-meta-cached">cached</span>}
+            </div>
+            <div class="deck-actions">
+              <a href={`/analyze/${encodeURIComponent(deck.id)}`} class="deck-action-btn primary">
+                🧪 Analyze deck
+              </a>
+              <a
+                href={`/find-commander/loading/${encodeURIComponent(deck.id)}?name=${encodeURIComponent(deck.name)}`}
+                class="deck-action-btn secondary"
+              >
+                👑 Find a commander
+              </a>
+            </div>
+          </div>
+
+          <h2 id="section-commanders" class="deck-commanders-heading">
             Commander{deck.commanders.length > 1 ? 's' : ''}
           </h2>
 
@@ -328,7 +338,7 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
             <details class="decklist-section collapsible-section" id="section-decklist" open>
               <summary class="collapsible-summary">
                 <span class="collapsible-title">Decklist</span>
-                <span class="collapsible-count">({deck.cardCount} cards)</span>
+                <span class="collapsible-count">({decklistCount} cards)</span>
               </summary>
               <div class="decklist-grid">
                 {deck.cardsByType.map((group) => (
