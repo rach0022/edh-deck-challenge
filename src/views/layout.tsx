@@ -46,7 +46,18 @@ export function Layout({ title, children }: LayoutProps) {
         <header>
           <div class="header-inner">
             <a href="/" class="logo" aria-label="The Command Crypt home">
-              <span aria-hidden="true">🃏</span> The Command Crypt
+              <span class="logo-mark" aria-hidden="true">
+                <svg
+                  class="logo-mark-icon"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 640 640"
+                  fill="currentColor"
+                >
+                  {/* Skull icon reused from the site favicon (src/public/favicon.svg). */}
+                  <path d="M480 491.4C538.5 447.4 576 379.8 576 304C576 171.5 461.4 64 320 64C178.6 64 64 171.5 64 304C64 379.8 101.5 447.4 160 491.4L160 528C160 554.5 181.5 576 208 576L240 576L240 536C240 522.7 250.7 512 264 512C277.3 512 288 522.7 288 536L288 576L352 576L352 536C352 522.7 362.7 512 376 512C389.3 512 400 522.7 400 536L400 576L432 576C458.5 576 480 554.5 480 528L480 491.4zM160 320C160 284.7 188.7 256 224 256C259.3 256 288 284.7 288 320C288 355.3 259.3 384 224 384C188.7 384 160 355.3 160 320zM416 256C451.3 256 480 284.7 480 320C480 355.3 451.3 384 416 384C380.7 384 352 355.3 352 320C352 284.7 380.7 256 416 256z" />
+                </svg>
+              </span>
+              <span class="logo-text">The Command Crypt</span>
             </a>
             <nav aria-label="Primary">
               <a href="/" class="nav-link">Home</a>
@@ -173,14 +184,39 @@ const css = `
   }
 
   .logo {
-    background: var(--accent-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
     font-size: 1.5rem;
     font-weight: 800;
     text-decoration: none;
     letter-spacing: -0.5px;
+  }
+
+  .logo-text {
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Logo mark square — gradient to match the hero mark. */
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.5rem;
+    background: var(--accent-gradient);
+    color: #fff;
+  }
+
+  .logo-mark-icon {
+    width: 62%;
+    height: 62%;
+    display: block;
   }
 
   .header-inner nav {
@@ -746,14 +782,31 @@ const css = `
   .hero h1 {
     font-size: 3.5rem;
     font-weight: 800;
+    margin-bottom: 2rem;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .hero-title-text {
     background: var(--accent-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 2rem;
-    letter-spacing: -1.5px;
-    line-height: 1.1;
-    text-align: center;
+  }
+
+  /* Hero logo mark — same gradient square as the header, scaled up to sit
+     beside the large hero title. Keep the skull icon solid white so it's
+     not clipped by the title's gradient text-fill. */
+  .hero-mark {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 0.9rem;
+    color: #fff;
+    -webkit-text-fill-color: #fff;
   }
 
   .hero-subtitle {
