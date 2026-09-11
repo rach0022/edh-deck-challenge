@@ -243,10 +243,12 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
   const hasPotential = !!(deck.combos && deck.combos.potentialCards.length > 0);
   const hasDecklist = deck.cardsByType.length > 0;
 
-  // The Decklist section lists only the mainboard (the commander is shown in
-  // its own section above), so its label reflects the mainboard total rather
-  // than the full deck count (which includes the commander).
-  const decklistCount = deck.cardsByType.reduce((sum, g) => sum + g.count, 0);
+  // The Decklist section lists the mainboard cards (the commander is shown in
+  // its own section above), but its label reflects the *full* deck size —
+  // commander(s) + mainboard — so it matches the header's "N cards" and
+  // Moxfield's own total. Using deck.cardCount avoids showing 99 for a legal
+  // 100-card Commander deck just because the commander is rendered separately.
+  const decklistCount = deck.cardCount;
 
   // Build the in-page nav from whichever sections are present.
   const navItems: SideNavItem[] = [
