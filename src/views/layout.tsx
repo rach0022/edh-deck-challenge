@@ -356,13 +356,13 @@ const css = `
 
   .progress-section {
     text-align: center;
-    margin-bottom: 4rem;
-    padding: 2rem 0;
+    margin-bottom: 2rem;
+    padding: 0.5rem 0;
   }
 
   .progress-section h1 {
     font-size: 2.4rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     font-weight: 800;
     background: var(--accent-gradient);
     -webkit-background-clip: text;
@@ -373,9 +373,9 @@ const css = `
   .progress-bar-container {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 100px;
-    height: 24px;
+    height: 18px;
     max-width: 640px;
-    margin: 1.5rem auto;
+    margin: 0.75rem auto;
     overflow: hidden;
     border: 1px solid var(--glass-border);
   }
@@ -390,7 +390,7 @@ const css = `
   .progress-text {
     color: var(--text-secondary);
     font-size: 1.05rem;
-    margin-top: 1rem;
+    margin-top: 0.5rem;
     font-weight: 500;
   }
 
@@ -773,7 +773,9 @@ const css = `
   .hero {
     max-width: 900px;
     margin: 0 auto;
-    padding: 6rem 0 4rem;
+    /* Trimmed from 6rem/4rem — the outsized top padding pushed the feature
+       grid below the fold on standard desktop viewports. */
+    padding: 3.5rem 0 3rem;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -782,7 +784,7 @@ const css = `
   .hero h1 {
     font-size: 3.5rem;
     font-weight: 800;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     letter-spacing: -1.5px;
     line-height: 1.1;
     display: flex;
@@ -814,11 +816,11 @@ const css = `
     font-size: 1.15rem;
     line-height: 1.7;
     text-align: center;
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
   }
 
   .hero-search {
-    margin-bottom: 5rem;
+    margin-bottom: 3rem;
     width: 100%;
     display: block;
   }
@@ -832,7 +834,10 @@ const css = `
 
   .features {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    /* Fluid columns: fill the available width with as many ~240px cards as
+       fit (3-up on desktop, 2-up on tablet, 1-up on phones) instead of a
+       hard 3-column lock, so the grid tracks the viewport width. */
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 1.5rem;
   }
 
@@ -1749,23 +1754,57 @@ const css = `
     One continuous fighting-select roster: 8 tiles per row, 4 rows for the 32
     color-identity slots. Sized to fit on screen without horizontal scroll.
   */
+  /*
+    Flexbox (not grid) so a partial final row stays centered rather than
+    left-aligned — 32 slots don't divide evenly into 6 or 3 columns, and CSS
+    Grid pins the leftover tiles to the left edge. Each tile gets a fixed
+    flex-basis matching the "N per row" target so the mosaic stays gapless and
+    centered on every width (this mirrors .cselect-roster). Column counts are
+    driven by --roster-cols, overridden per breakpoint below.
+  */
   .roster-grid-challenge {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     /* No gaps at all — tiles butt together edge-to-edge in both directions,
        forming a continuous character-select mosaic. */
     gap: 0;
     margin-bottom: 3rem;
+    --roster-cols: 8;
   }
 
-  @media (max-width: 1200px) {
-    .roster-grid-challenge { grid-template-columns: repeat(6, 1fr); }
+  /*
+    Height-aware cap (desktop only, ≥1025px where all 8 columns show) so all
+    4 rows fit the viewport without scrolling. Each tile is 3:4
+    (height = 1.333 × width). Four rows must fit in the height left after the
+    header, progress section, and page padding (~320px), so a row can be at
+    most (100vh - 320px) / 4 tall — i.e. a tile width of that × 0.75. We clamp
+    the roster's max-width to 8 × that width so the flex tiles (each 1/8 of the
+    row) shrink to fit vertically, while never exceeding the content column.
+    Scoped to wide screens because narrower breakpoints reduce the column count
+    and don't have the 4-row overflow problem.
+  */
+  @media (min-width: 1025px) {
+    .roster-grid-challenge {
+      max-width: min(100%, max(760px, calc((100vh - 320px) / 4 * 0.75 * 8)));
+    }
   }
-  @media (max-width: 860px) {
-    .roster-grid-challenge { grid-template-columns: repeat(4, 1fr); }
+
+  .roster-grid-challenge .roster-slot {
+    flex: 0 0 calc(100% / var(--roster-cols));
+    max-width: calc(100% / var(--roster-cols));
+  }
+
+  /* Large tablets / small laptops (incl. iPad landscape at 1024px). */
+  @media (max-width: 1200px) {
+    .roster-grid-challenge { --roster-cols: 6; }
+  }
+  /* Tablets in portrait (iPad 810/834/768). */
+  @media (max-width: 900px) {
+    .roster-grid-challenge { --roster-cols: 4; }
   }
   @media (max-width: 560px) {
-    .roster-grid-challenge { grid-template-columns: repeat(3, 1fr); }
+    .roster-grid-challenge { --roster-cols: 3; }
   }
 
   .roster-slot {
@@ -1874,6 +1913,18 @@ const css = `
 
   .roster-slot .slot-colors {
     margin-bottom: 0.3rem;
+  }
+
+  /*
+   * Multi-deck roster tiles use an absolutely-positioned carousel. The default
+   * 3.5rem min-height is far taller than a single deck's info block, and since
+   * .roster-slot-content is bottom-anchored (justify-content: flex-end) that
+   * extra height pushes the mana symbols and name upward — leaving multi-deck
+   * slots (e.g. Mardu with 2 decks) misaligned above single-deck slots.
+   * Match the single-deck info footprint so all tiles align.
+   */
+  .roster-slot .deck-info-carousel {
+    min-height: 1.6rem;
   }
 
   .roster-slot .slot-colors img {
@@ -3154,6 +3205,84 @@ const css = `
   }
 
   /* ─── Responsive ────────────────────────── */
+
+  /* Short desktop viewports (laptops, ~720-820px tall, or any window that
+     isn't full-height). The home hero was tuned for tall screens; on a short
+     viewport its stacked spacing pushes the feature cards below the fold.
+     Compress the vertical rhythm so the whole hero fits without scrolling. */
+  @media (min-width: 1025px) and (max-height: 900px) {
+    main { padding: 1.75rem 3rem; }
+    .hero { padding: 1.5rem 0 1.5rem; }
+    .hero h1 { font-size: 2.9rem; margin-bottom: 1rem; }
+    .hero-mark { width: 3.2rem; height: 3.2rem; }
+    .hero-subtitle { font-size: 1.05rem; line-height: 1.5; margin-bottom: 1.5rem; }
+    .hero-search { margin-bottom: 2rem; }
+    .search-form input, .search-form button { padding-top: 1rem; padding-bottom: 1rem; }
+    .search-hint { margin-top: 1rem; }
+    .mode-toggle { margin-bottom: 1rem; }
+    .features { gap: 1rem; }
+    .feature-card { padding: 1.5rem 1.5rem; }
+
+    /* 32-deck challenge: shrink the progress header so the roster sits higher
+       and all four rows clear the fold. */
+    .progress-section { margin-bottom: 1.5rem; padding: 1rem 0; }
+    .progress-section h1 { font-size: 1.9rem; margin-bottom: 0.5rem; }
+    .progress-bar-container { margin: 1rem auto; height: 18px; }
+    .progress-text { font-size: 0.95rem; margin-top: 0.5rem; }
+    .roster-grid-challenge { margin-bottom: 1.5rem; }
+    /* Recompute the height cap against the reduced ~230px of chrome above. */
+    .roster-grid-challenge { max-width: min(100%, max(760px, calc((100vh - 230px) / 4 * 0.75 * 8))); }
+  }
+
+  /* Very short viewports (~680px and under): tighten further and let the
+     feature copy shrink so the hero + all six cards stay on screen. */
+  @media (min-width: 1025px) and (max-height: 680px) {
+    main { padding: 1.25rem 3rem; }
+    .hero { padding: 1rem 0 1rem; }
+    .hero h1 { font-size: 2.4rem; margin-bottom: 0.75rem; }
+    .hero-subtitle { font-size: 0.98rem; margin-bottom: 1rem; }
+    .hero-search { margin-bottom: 1.25rem; }
+    .feature-card { padding: 1.1rem 1.25rem; }
+    .feature-card h3 { margin-bottom: 0.4rem; }
+    .feature-card p { font-size: 0.88rem; line-height: 1.45; }
+  }
+
+  /* Tablet range (incl. iPad portrait 810/834 and landscape 1024). Without
+     this, hero text, page titles and section padding stayed at full desktop
+     size on iPad while the roster had already collapsed to fewer columns —
+     everything looked oversized. Scale the big type/padding down here. */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    main { padding: 2rem 1.5rem; }
+    .hero { padding: 2.5rem 0 2rem; }
+    .hero h1 { font-size: 2.8rem; margin-bottom: 1.25rem; }
+    .hero-subtitle { font-size: 1.05rem; margin-bottom: 1.75rem; }
+    /* The 5rem gap under the search block is the main "too spaced out" culprit
+       on tablet — pull the feature grid up closer to the search form. */
+    .hero-search { margin-bottom: 2.5rem; }
+    .search-hint { margin-top: 1rem; }
+    .mode-toggle { margin-bottom: 1rem; }
+    .cselect-title { font-size: 2.1rem; }
+    .progress-section h1 { font-size: 2rem; }
+    .deck-header h1 { font-size: 1.9rem; }
+    .header-inner { padding: 1rem 1.5rem; }
+    /* Three feature cards get cramped at tablet width — go two-up, tighter. */
+    .features { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .feature-card { padding: 1.5rem 1.5rem; }
+
+    /* Collapse the fixed 220px side nav into a horizontal scroller above the
+       content, same as the phone layout. On iPad the sticky sidebar otherwise
+       ate a fifth of the width and squeezed the multi-section content column.
+       (See SideNav's own doc comment: it's meant to collapse on narrow screens.) */
+    .page-with-sidenav { grid-template-columns: 1fr; gap: 1rem; }
+    .side-nav { position: static; max-height: none; overflow: visible; }
+    .side-nav-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .side-nav-link { border-left: none; }
+
+    /* Two-column card lists (cEDH match groups, Build "to buy") get too narrow
+       once the cEDH match card also holds its art column — drop to one column. */
+    .cedh-groups { columns: 1; }
+    .build-tobuy-groups { columns: 1; }
+  }
 
   @media (max-width: 768px) {
     main { padding: 1.5rem 1rem; }
