@@ -59,4 +59,4 @@ fi
 
 # ─── Launch ──────────────────────────────────────────────────────────────────
 echo "🐳 Starting with Docker Compose (APP_PORT=${APP_PORT})..."
-exec docker compose up --build "$@"
+exec docker compose up -d --build "$@"
