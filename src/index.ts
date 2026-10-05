@@ -132,20 +132,42 @@ const cacheDriverLabel = {
   memory: 'In-memory',
 } as const;
 
+// Bind to all interfaces so the server is reachable from outside the container
+// (Docker port forwarding, WSL → Windows host). Binding to localhost/127.0.0.1
+// would make the port unreachable from the host even when published.
+const hostname = '0.0.0.0';
+
 console.log(`
 🃏 The Command Crypt API
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Port:        ${config.port}
+  Host:        ${hostname}
   Environment: ${config.nodeEnv}
   Cache:       ${cacheDriverLabel[config.cacheDriver]}
   Cache TTL:   ${config.cacheTtlSeconds}s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `);
 
-serve({
-  fetch: app.fetch,
-  port: config.port,
-});
+serve(
+  {
+    fetch: app.fetch,
+    port: config.port,
+    hostname,
+  },
+  (info) => {
+    // `info.address` is the bound interface (0.0.0.0 in the container).
+    // Print the URLs you actually use to reach the app from the host.
+    console.log('✅ Server listening. Open one of these URLs:');
+    console.log(`   • http://localhost:${info.port}`);
+    console.log(`   • http://127.0.0.1:${info.port}`);
+    console.log(
+      `   (container bound to ${info.address}:${info.port} — reachable via published Docker port)`,
+    );
+    console.log(
+      '   In Docker: make sure the port is published, e.g. "docker run -p 3000:3000 ..." or the ports: mapping in docker-compose.yml.',
+    );
+  },
+);
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 

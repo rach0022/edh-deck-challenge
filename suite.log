@@ -1,0 +1,117 @@
+
+ RUN  v3.2.7 /mnt/c/Users/ravir/code/edh-deck-challenge
+
+ ✓ tests/build-commander.test.ts (6 tests) 22ms
+stdout | tests/roster-grid-challenge.preservation.property.test.ts > Firefox challenge roster grid — Property 2 (Preservation): unaffected renders are identical > diagnostic: surfaces the detected roster layout mode (flex-percentage before fix, grid-fr after)
+[roster layout] detected mode = "grid-fr"
+
+ ✓ tests/roster-grid-challenge.preservation.property.test.ts (9 tests) 113ms
+ ✓ tests/views.test.ts (23 tests) 164ms
+stderr | tests/scryfall.test.ts > ScryfallService.searchCommanders > throws ScryfallUnavailableError when fetch rejects (network failure)
+Scryfall request failed: Error: network down
+    at [90m/mnt/c/Users/ravir/code/edh-deck-challenge/[39mtests/scryfall.test.ts:227:21
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:155:11
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:26
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+
+stderr | tests/scryfall.test.ts > ScryfallService.searchCommanders > throws ScryfallUnavailableError when fetch aborts (timeout / AbortError)
+Scryfall request failed: Error [AbortError]: The operation was aborted
+    at [90m/mnt/c/Users/ravir/code/edh-deck-challenge/[39mtests/scryfall.test.ts:238:24
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:155:11
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:26
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+
+stderr | tests/scryfall.test.ts > ScryfallService.getCardByName > throws ScryfallUnavailableError when fetch rejects
+Scryfall request failed: Error: network down
+    at [90m/mnt/c/Users/ravir/code/edh-deck-challenge/[39mtests/scryfall.test.ts:352:21
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:155:11
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:26
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+
+stderr | tests/scryfall.test.ts > ScryfallService.getCheapestUsdByName > degrades to null (no throw) when Scryfall is unavailable
+Scryfall request failed: Error: network down
+    at [90m/mnt/c/Users/ravir/code/edh-deck-challenge/[39mtests/scryfall.test.ts:459:21
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:155:11
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:26
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+
+ ✓ tests/scryfall.test.ts (27 tests) 40ms
+ ✓ tests/edhrec-parser.test.ts (31 tests) 15ms
+stdout | tests/roster-grid-challenge.firefox-centering.property.test.ts > Firefox challenge roster grid stays gapless and centered - Property 1 (Bug Condition) > exposes the real roster layout mode from the compiled CSS (diagnostic)
+[roster layout] detected mode = "grid-fr"
+
+ ✓ tests/roster-grid-challenge.firefox-centering.property.test.ts (5 tests) 83ms
+ ✓ utils/tests/integration.test.ts (12 tests) 14ms
+ ✓ utils/tests/moxfield-client.test.ts (14 tests) 17ms
+stderr | tests/pages.build.test.ts > GET /build/:username — error mapping > maps generic Error → 500
+Build page render error: Error: boom
+    at [90m/mnt/c/Users/ravir/code/edh-deck-challenge/[39mtests/pages.build.test.ts:206:43
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:734:40
+    at runWithSuite [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1849:8[90m)[39m
+    at Object.collect [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:734:10[90m)[39m
+    at Object.collect [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:738:54[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at collectTests [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1179:25[90m)[39m
+    at startTests [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1817:17[90m)[39m
+    at [90mfile:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4mvitest[24m/dist/chunks/runBaseTests.9Ij9_de-.js:117:26
+    at withEnv [90m(file:///mnt/c/Users/ravir/code/edh-deck-challenge/[39mnode_modules/[4mvitest[24m/dist/chunks/runBaseTests.9Ij9_de-.js:84:3[90m)[39m
+
+ ✓ tests/pages.build.test.ts (12 tests) 72ms
+ ✓ tests/selection-key.property.test.ts (6 tests) 93ms
+ ✓ tests/edhrec.test.ts (9 tests) 21ms
+ ✓ tests/build-commander-split.partition.property.test.ts (5 tests) 138ms
+ ✓ utils/tests/deck-organizer.property.test.ts (8 tests) 70ms
+ ✓ tests/moxfield.test.ts (21 tests) 14ms
+ ✓ tests/edhrec-slug.property.test.ts (10 tests) 80ms
+ ✓ tests/commander-finder.test.ts (15 tests) 8ms
+ ✓ utils/tests/ascii-renderer.test.ts (14 tests) 9ms
+ ✓ utils/tests/html-renderer.test.ts (14 tests) 12ms
+ ✓ tests/build-commander-split.source-decks.property.test.ts (2 tests) 135ms
+ ✓ tests/deck-analysis.test.ts (12 tests) 17ms
+ ✓ utils/tests/commander-extractor.test.ts (5 tests) 9ms
+ ✓ tests/build-dispatch.url.property.test.ts (4 tests) 97ms
+ ✓ tests/build-dispatch.validation.property.test.ts (5 tests) 80ms
+ ✓ tests/edhrec-parser.companion.property.test.ts (3 tests) 79ms
+ ✓ utils/tests/color-identity.property.test.ts (4 tests) 91ms
+ ✓ tests/scryfall-query.cache-key.property.test.ts (4 tests) 45ms
+ ✓ tests/deck-suggestions.test.ts (8 tests) 7ms
+ ✓ tests/build-commander-split.owned-set.property.test.ts (3 tests) 108ms
+ ✓ tests/build-commander-split.board.test.ts (3 tests) 4ms
+ ✓ tests/build-commander-pricing.conversion.property.test.ts (3 tests) 61ms
+ ✓ utils/tests/ascii-renderer.property.test.ts (3 tests) 72ms
+ ✓ tests/build-commander-pricing.total.property.test.ts (4 tests) 20ms
+ ✓ tests/collection.test.ts (5 tests) 5ms
+ ✓ tests/scryfall-query.legality.property.test.ts (2 tests) 21ms
+ ✓ tests/cedh-extract.test.ts (2 tests) 4ms
+ ✓ utils/tests/validator.test.ts (5 tests) 6ms
+ ✓ utils/tests/validator.property.test.ts (1 test) 11ms
+
+ Test Files  37 passed (37)
+      Tests  319 passed (319)
+   Start at  10:23:05
+   Duration  30.23s (transform 2.84s, setup 0ms, collect 20.63s, tests 1.86s, environment 10ms, prepare 41.18s)
+

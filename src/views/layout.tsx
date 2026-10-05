@@ -1763,8 +1763,8 @@ const css = `
     driven by --roster-cols, overridden per breakpoint below.
   */
   .roster-grid-challenge {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(var(--roster-cols), 1fr);
     justify-content: center;
     /* No gaps at all — tiles butt together edge-to-edge in both directions,
        forming a continuous character-select mosaic. */
@@ -1790,10 +1790,14 @@ const css = `
     }
   }
 
-  .roster-grid-challenge .roster-slot {
-    flex: 0 0 calc(100% / var(--roster-cols));
-    max-width: calc(100% / var(--roster-cols));
-  }
+  /*
+    Under CSS Grid, each .roster-slot auto-places into one 1fr track sized by
+    grid-template-columns above. The grid algorithm distributes the full inner
+    width across the tracks in a single step, so Firefox no longer rounds each
+    tile independently and the row fills the container edge-to-edge with no
+    residual slack. The old percentage flex-basis / max-width rule is removed
+    deliberately — reintroducing it would bring back the sub-pixel rounding.
+  */
 
   /* Large tablets / small laptops (incl. iPad landscape at 1024px). */
   @media (max-width: 1200px) {

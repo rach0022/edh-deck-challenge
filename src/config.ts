@@ -33,6 +33,9 @@ export interface AppConfig {
   puppeteerHeadless: boolean;
   /** Environment name */
   nodeEnv: string;
+  /** Host-facing port shown in startup logs (e.g. the Docker published port).
+   *  Falls back to `port` when not set. */
+  publicPort: number;
 }
 
 /**
@@ -74,5 +77,6 @@ export function loadConfig(): AppConfig {
     puppeteerTimeoutMs: parseInt(process.env.PUPPETEER_TIMEOUT_MS ?? '60000', 10),
     puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false',
     nodeEnv: process.env.NODE_ENV ?? 'development',
+    publicPort: parseInt(process.env.PUBLIC_PORT ?? process.env.PORT ?? '3000', 10),
   };
 }
