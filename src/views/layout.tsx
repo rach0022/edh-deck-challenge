@@ -1769,7 +1769,12 @@ const css = `
     /* No gaps at all — tiles butt together edge-to-edge in both directions,
        forming a continuous character-select mosaic. */
     gap: 0;
-    margin-bottom: 3rem;
+    /* Center the grid box within the content column. On wide screens the
+       height-aware max-width (below) makes this box narrower than the column,
+       so auto side margins are needed to keep it centered rather than
+       left-aligned (justify-content only centers the tracks *inside* the grid,
+       not the grid box itself). */
+    margin: 0 auto 3rem;
     --roster-cols: 8;
   }
 

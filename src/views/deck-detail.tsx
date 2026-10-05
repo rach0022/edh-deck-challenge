@@ -413,13 +413,13 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
       </div>
 
       {hasDecklist && (
-        <textarea
-          id="decklist-export"
-          hidden
-          aria-hidden="true"
-          readOnly
-          value={decklistText}
-        />
+        // The decklist text must be the textarea's children (not a `value`
+        // attribute): browsers populate textarea.value from the element's
+        // content, and a `value` attribute on <textarea> is non-standard and
+        // leaves .value empty. The inline copy script reads .value from here.
+        <textarea id="decklist-export" hidden aria-hidden="true" readOnly>
+          {decklistText}
+        </textarea>
       )}
 
       <div style="margin-top: 2rem;">
@@ -463,31 +463,67 @@ function deckDetailScript(): string {
     }, 1800);
   }
 
+  // execCommand fallback that works on insecure (http://) origins and in
+  // Firefox. The source textarea is hidden (display:none), which can't be
+  // selected, so copy from a throwaway textarea that is in the DOM and
+  // focusable but positioned off-screen. Must run inside the click handler so
+  // it counts as a user gesture.
   function fallbackCopy(text) {
+    var temp = document.createElement('textarea');
+    temp.value = text;
+    temp.setAttribute('readonly', '');
+    temp.style.position = 'fixed';
+    temp.style.top = '0';
+    temp.style.left = '0';
+    temp.style.width = '1px';
+    temp.style.height = '1px';
+    temp.style.padding = '0';
+    temp.style.border = 'none';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+
+    var ok = false;
     try {
-      source.hidden = false;
-      source.removeAttribute('aria-hidden');
-      source.select();
-      source.setSelectionRange(0, text.length);
-      var ok = document.execCommand('copy');
-      source.hidden = true;
-      source.setAttribute('aria-hidden', 'true');
-      return ok;
+      // Preserve any existing selection so we can restore it afterwards.
+      var selection = document.getSelection();
+      var previous = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+      temp.focus();
+      temp.select();
+      temp.setSelectionRange(0, text.length);
+      ok = document.execCommand('copy');
+
+      if (previous && selection) {
+        selection.removeAllRanges();
+        selection.addRange(previous);
+      }
     } catch (err) {
-      return false;
+      ok = false;
     }
+
+    document.body.removeChild(temp);
+    return ok;
   }
 
   btn.addEventListener('click', function() {
     var text = source.value;
+
+    // Try the fallback first: it's reliable on http:// origins (LAN / localhost
+    // dev) where navigator.clipboard is unavailable. If it fails, try the async
+    // Clipboard API (available on https:// / secure contexts).
+    if (fallbackCopy(text)) {
+      flash('✅ Copied!');
+      return;
+    }
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function() {
         flash('✅ Copied!');
       }, function() {
-        flash(fallbackCopy(text) ? '✅ Copied!' : '⚠️ Copy failed');
+        flash('⚠️ Copy failed');
       });
     } else {
-      flash(fallbackCopy(text) ? '✅ Copied!' : '⚠️ Copy failed');
+      flash('⚠️ Copy failed');
     }
   });
 })();
