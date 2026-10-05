@@ -36,6 +36,14 @@ export interface AppConfig {
   /** Host-facing port shown in startup logs (e.g. the Docker published port).
    *  Falls back to `port` when not set. */
   publicPort: number;
+  /**
+   * The host machine's LAN/"home network" IP (or hostname) to advertise in the
+   * startup logs so other devices can reach the app. Must be supplied by the
+   * host at run time (e.g. `LAN_HOST` in docker-compose), because a container
+   * can only see Docker's internal network, not the host's real LAN address.
+   * Empty when not provided — the server then falls back to auto-detected
+   * local interfaces. */
+  lanHost: string;
 }
 
 /**
@@ -78,5 +86,6 @@ export function loadConfig(): AppConfig {
     puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false',
     nodeEnv: process.env.NODE_ENV ?? 'development',
     publicPort: parseInt(process.env.PUBLIC_PORT ?? process.env.PORT ?? '3000', 10),
+    lanHost: (process.env.LAN_HOST ?? '').trim(),
   };
 }

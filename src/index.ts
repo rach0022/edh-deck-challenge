@@ -21,6 +21,7 @@ import { serve } from '@hono/node-server';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { networkInterfaces } from 'node:os';
 import { loadConfig } from './config.js';
 import { createCacheService } from './services/cache.js';
 import { createBrowserService } from './services/browser.js';
@@ -137,6 +138,26 @@ const cacheDriverLabel = {
 // would make the port unreachable from the host even when published.
 const hostname = '0.0.0.0';
 
+/**
+ * Collects this machine's non-internal IPv4 addresses — the LAN/"home network"
+ * IPs other devices (phones, tablets, another laptop) can use to reach the
+ * server. Skips loopback and internal interfaces; returns an empty list when
+ * no external interface is found (e.g. inside a container with only the
+ * loopback and a bridged interface that doesn't expose a routable IP).
+ */
+function getLanAddresses(): string[] {
+  const addresses: string[] = [];
+  for (const iface of Object.values(networkInterfaces())) {
+    if (!iface) continue;
+    for (const net of iface) {
+      // Node ≥18 reports family as the string 'IPv4'; older/typed as 4.
+      const isIpv4 = net.family === 'IPv4' || (net.family as unknown as number) === 4;
+      if (isIpv4 && !net.internal) addresses.push(net.address);
+    }
+  }
+  return addresses;
+}
+
 console.log(`
 🃏 The Command Crypt API
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -158,8 +179,35 @@ serve(
     // `info.address` is the bound interface (0.0.0.0 in the container).
     // Print the URLs you actually use to reach the app from the host.
     console.log('✅ Server listening. Open one of these URLs:');
-    console.log(`   • http://localhost:${info.port}`);
-    console.log(`   • http://127.0.0.1:${info.port}`);
+    console.log(`   • http://localhost:${info.port}  (this machine)`);
+    console.log(`   • http://127.0.0.1:${info.port}  (this machine)`);
+
+    // LAN URL — share this to reach the app from other devices on the same
+    // home/office network (phone, tablet, another computer).
+    //
+    // Prefer the host-provided LAN_HOST (via config.lanHost) with the
+    // host-facing published port (config.publicPort). A container can only see
+    // Docker's internal bridge network, so the real host LAN IP must be passed
+    // in from the host — see docker-compose.yml / the LAN_HOST one-liner in the
+    // README. When LAN_HOST isn't set (e.g. running natively), fall back to
+    // auto-detecting this machine's own interfaces.
+    if (config.lanHost) {
+      console.log('   On your network (open from other devices):');
+      console.log(`   • http://${config.lanHost}:${config.publicPort}`);
+    } else {
+      const lanAddresses = getLanAddresses();
+      if (lanAddresses.length > 0) {
+        console.log('   On your network (open from other devices):');
+        for (const address of lanAddresses) {
+          console.log(`   • http://${address}:${config.publicPort}`);
+        }
+      } else {
+        console.log(
+          '   (no LAN address detected — set LAN_HOST to your host\'s IP to show a shareable URL)',
+        );
+      }
+    }
+
     console.log(
       `   (container bound to ${info.address}:${info.port} — reachable via published Docker port)`,
     );

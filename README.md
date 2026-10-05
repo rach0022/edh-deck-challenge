@@ -234,17 +234,17 @@ The easiest way to run the full app (API + Redis) locally is with Docker Compose
 Everything runs in containers — no local Node or Redis setup required.
 
 ```bash
-# Build and start in the background
-docker compose up -d --build
+# Recommended: auto-detects your LAN IP so other devices can connect
+./scripts/start.sh            # or: npm run start:docker
 
-# View logs
-docker compose logs -f
-
-# Stop and remove the containers
-docker compose down
+# Or run Docker Compose directly:
+docker compose up -d --build  # build and start in the background
+docker compose logs -f        # view logs
+docker compose down           # stop and remove the containers
 ```
 
-Once running, open http://localhost:3000.
+Once running, open http://localhost:3000. To open it from another device on
+your network, see [Sharing on your home network](#sharing-on-your-home-network).
 
 ### Choosing the port
 
@@ -259,6 +259,33 @@ APP_PORT=8080 docker compose up -d --build
 
 Or set it persistently by copying `.env.example` to `.env` (Docker Compose loads
 `.env` from this directory automatically) and editing the value.
+
+### Sharing on your home network
+
+To open the app from another device (phone, tablet, another computer) on the
+same Wi-Fi, you need the host machine's LAN IP in the URL. A container can only
+see Docker's internal network, so the host IP has to be passed in.
+
+The easiest way is the start script, which auto-detects your LAN IP and starts
+Docker Compose for you:
+
+```bash
+./scripts/start.sh          # or: npm run start:docker
+./scripts/start.sh -d       # detached (background)
+APP_PORT=8080 ./scripts/start.sh   # custom host port
+```
+
+The server then prints a ready-to-share URL under **"On your network"** in its
+startup logs, e.g. `http://192.168.68.50:3000` — send that to your other device.
+
+To override detection (or on an unusual network), set `LAN_HOST` yourself:
+
+```bash
+LAN_HOST=10.0.0.5 ./scripts/start.sh
+```
+
+When `LAN_HOST` is unset and can't be detected, the server falls back to listing
+local interfaces, which may include extra virtual/Docker addresses.
 
 ---
 
@@ -407,6 +434,8 @@ periodically to refresh it.
 | `PUPPETEER_TIMEOUT_MS` | No | `60000` | Puppeteer navigation timeout (ms) |
 | `PUPPETEER_HEADLESS` | No | `true` | Set to `false` to see browser window |
 | `APP_PORT` | No | `3000` | Host port that maps to the container (Docker Compose) |
+| `PUBLIC_PORT` | No | `PORT` | Host-facing port shown in the "On your network" startup URL (Docker Compose sets this to `APP_PORT`) |
+| `LAN_HOST` | No | — | Host LAN IP advertised in startup logs so other devices can connect. Auto-detects local interfaces when unset |
 
 ### Cache Driver Auto-Detection
 

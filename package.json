@@ -9,6 +9,7 @@
     "build": "tsc && mkdir -p dist/public dist/data && cp -r src/public/. dist/public/ && cp -r src/data/. dist/data/",
     "build:cedh": "NODE_OPTIONS=--no-deprecation tsx src/scripts/build-cedh-corpus.ts",
     "start": "node dist/index.js",
+    "start:docker": "./scripts/start.sh",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

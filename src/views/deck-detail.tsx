@@ -15,6 +15,51 @@ function manaSymbolUrl(color: string): string {
   return `https://svgs.scryfall.io/card-symbols/${color}.svg`;
 }
 
+/**
+ * Serializes the deck into Moxfield's plain-text import/export format —
+ * one `"<quantity> <card name>"` line per card — with each card's combo
+ * participation appended as a trailing comment:
+ *
+ *   1 Thassa's Oracle  # ♾️2 combos
+ *   1 Demonic Consultation  # ♾️1 combo, 🧩1 potential
+ *
+ * The commander(s) are emitted first under a `// Commander` header (they live
+ * in Moxfield's command zone, separate from the mainboard, so they aren't in
+ * `cardsByType`); the mainboard follows grouped by card type. The `#` comments
+ * are ignored by Moxfield's importer, so the text round-trips as a valid
+ * decklist while still carrying the combo counts for human readers.
+ */
+function buildDecklistExport(deck: DeckDetailResponse): string {
+  const lines: string[] = [];
+
+  const comboSuffix = (card: DeckCardInfo): string => {
+    const parts: string[] = [];
+    const combo = card.comboCount ?? 0;
+    const potential = card.potentialComboCount ?? 0;
+    if (combo > 0) parts.push(`♾️${combo} combo${combo > 1 ? 's' : ''}`);
+    if (potential > 0) {
+      parts.push(`🧩${potential} potential`);
+    }
+    return parts.length > 0 ? `  # ${parts.join(', ')}` : '';
+  };
+
+  if (deck.commanders.length > 0) {
+    lines.push('// Commander');
+    for (const commander of deck.commanders) {
+      lines.push(`1 ${commander.name}`);
+    }
+    lines.push('');
+  }
+
+  for (const group of deck.cardsByType) {
+    for (const card of group.cards) {
+      lines.push(`${card.quantity} ${card.name}${comboSuffix(card)}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function cardImageUrl(setCode: string, collectorNumber: string): string {
   return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=normal`;
 }
@@ -250,6 +295,11 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
   // 100-card Commander deck just because the commander is rendered separately.
   const decklistCount = deck.cardCount;
 
+  // Moxfield-format decklist text (with combo-count comments) for the
+  // clipboard export. Embedded in a hidden <textarea> so the inline copy
+  // script can read it without any server round-trip.
+  const decklistText = buildDecklistExport(deck);
+
   // Build the in-page nav from whichever sections are present.
   const navItems: SideNavItem[] = [
     { id: 'section-commanders', label: `Commander${deck.commanders.length > 1 ? 's' : ''}` },
@@ -303,6 +353,16 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
               >
                 👑 Find a commander
               </a>
+              {hasDecklist && (
+                <button
+                  type="button"
+                  id="copy-decklist-btn"
+                  class="deck-action-btn secondary"
+                  data-label="📋 Copy decklist"
+                >
+                  📋 Copy decklist
+                </button>
+              )}
             </div>
           </div>
 
@@ -352,10 +412,84 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
         </div>
       </div>
 
+      {hasDecklist && (
+        <textarea
+          id="decklist-export"
+          hidden
+          aria-hidden="true"
+          readOnly
+          value={decklistText}
+        />
+      )}
+
       <div style="margin-top: 2rem;">
         <a href="/" class="back-link" id="back-link">← Back</a>
       </div>
-      <script dangerouslySetInnerHTML={{ __html: "var b=document.getElementById('back-link');if(b&&window.history.length>1){b.addEventListener('click',function(e){e.preventDefault();window.history.back();});}" }} />
+      <script dangerouslySetInnerHTML={{ __html: deckDetailScript() }} />
     </Layout>
   );
+}
+
+/**
+ * Inline, dependency-free progressive enhancement for the deck-detail page:
+ *  - Back link: intercept clicks to use history.back() when there's history.
+ *  - Copy decklist: copy the hidden #decklist-export textarea's contents to the
+ *    clipboard, preferring the async Clipboard API and falling back to
+ *    execCommand('copy') on older/insecure contexts. Shows a brief "Copied!"
+ *    confirmation on the button, then restores its original label.
+ */
+function deckDetailScript(): string {
+  return `
+(function() {
+  var back = document.getElementById('back-link');
+  if (back && window.history.length > 1) {
+    back.addEventListener('click', function(e) {
+      e.preventDefault();
+      window.history.back();
+    });
+  }
+
+  var btn = document.getElementById('copy-decklist-btn');
+  var source = document.getElementById('decklist-export');
+  if (!btn || !source) return;
+
+  function flash(message) {
+    var original = btn.getAttribute('data-label') || btn.textContent;
+    btn.textContent = message;
+    btn.classList.add('is-copied');
+    setTimeout(function() {
+      btn.textContent = original;
+      btn.classList.remove('is-copied');
+    }, 1800);
+  }
+
+  function fallbackCopy(text) {
+    try {
+      source.hidden = false;
+      source.removeAttribute('aria-hidden');
+      source.select();
+      source.setSelectionRange(0, text.length);
+      var ok = document.execCommand('copy');
+      source.hidden = true;
+      source.setAttribute('aria-hidden', 'true');
+      return ok;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  btn.addEventListener('click', function() {
+    var text = source.value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        flash('✅ Copied!');
+      }, function() {
+        flash(fallbackCopy(text) ? '✅ Copied!' : '⚠️ Copy failed');
+      });
+    } else {
+      flash(fallbackCopy(text) ? '✅ Copied!' : '⚠️ Copy failed');
+    }
+  });
+})();
+`;
 }

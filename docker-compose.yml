@@ -18,6 +18,14 @@ services:
       - REDIS_URL=redis://redis:6379
       - CACHE_TTL_SECONDS=900
       - PUPPETEER_HEADLESS=true
+      # Host-facing published port, shown in startup logs (matches APP_PORT).
+      - PUBLIC_PORT=${APP_PORT:-3000}
+      # Host LAN IP to advertise so other devices on your network can connect.
+      # A container can't see the host's real LAN IP, so it's passed in from the
+      # host. Easiest way to set it + start: `./scripts/start.sh` (or
+      # `npm run start:docker`), which auto-detects the LAN IP. Falls back to
+      # empty (server then prints an auto-detect note) when unset.
+      - LAN_HOST=${LAN_HOST:-}
     depends_on:
       redis:
         condition: service_healthy

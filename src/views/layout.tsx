@@ -2702,6 +2702,13 @@ const css = `
     color: #fff;
     box-shadow: 0 6px 24px rgba(168, 85, 247, 0.2);
   }
+  /* Transient confirmation state after copying the decklist. */
+  .deck-action-btn.is-copied,
+  .deck-action-btn.is-copied:hover {
+    border-color: var(--accent-green, #34d399);
+    color: var(--accent-green, #34d399);
+    box-shadow: 0 6px 24px rgba(52, 211, 153, 0.2);
+  }
 
   /* Small outlined button (e.g. Refresh). */
   .secondary-button {
