@@ -60,6 +60,57 @@ function buildDecklistExport(deck: DeckDetailResponse): string {
   return lines.join('\n');
 }
 
+/**
+ * Serializes the "Combos Found" section into a plain-text block suitable for
+ * copying to the clipboard. One stanza per combo, separated by a blank line:
+ *
+ *   Thassa's Oracle + Demonic Consultation
+ *   Produces: Win the game, Infinite mana
+ *   Bracket: 2
+ *   Prerequisites: ...
+ *   Steps:
+ *     1. ...
+ *     2. ...
+ *   https://commanderspellbook.com/combo/...
+ *
+ * Only the combos actually present in the deck are exported (we intentionally
+ * ignore potential combos). Template requirements (generic card slots) are
+ * appended to the card list the same way the on-page rendering shows them.
+ */
+function buildCombosExport(combos: SpellbookCombo[]): string {
+  const stanzas = combos.map((combo) => {
+    const lines: string[] = [];
+
+    const cardNames = combo.cards.map((c) => c.name);
+    const requireNames = combo.requires.map((r) => r.name);
+    lines.push([...cardNames, ...requireNames].join(' + '));
+
+    if (combo.produces.length > 0) {
+      lines.push(`Produces: ${combo.produces.map((f) => f.name).join(', ')}`);
+    }
+    if (combo.bracketTag) {
+      lines.push(`Bracket: ${combo.bracketTag}`);
+    }
+    if (combo.easyPrerequisites) {
+      lines.push(`Prerequisites: ${combo.easyPrerequisites}`);
+    }
+
+    const steps = combo.description.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (steps.length > 0) {
+      lines.push('Steps:');
+      steps.forEach((step, i) => lines.push(`  ${i + 1}. ${step}`));
+    }
+
+    if (combo.spellbookUrl) {
+      lines.push(combo.spellbookUrl);
+    }
+
+    return lines.join('\n');
+  });
+
+  return stanzas.join('\n\n');
+}
+
 function cardImageUrl(setCode: string, collectorNumber: string): string {
   return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=normal`;
 }
@@ -300,6 +351,10 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
   // script can read it without any server round-trip.
   const decklistText = buildDecklistExport(deck);
 
+  // Plain-text export of just the combos found in the deck (ignoring potential
+  // combos), read by the inline copy script from a hidden <textarea>.
+  const combosText = hasCombos ? buildCombosExport(deck.combos!.combos) : '';
+
   // Build the in-page nav from whichever sections are present.
   const navItems: SideNavItem[] = [
     { id: 'section-commanders', label: `Commander${deck.commanders.length > 1 ? 's' : ''}` },
@@ -363,6 +418,16 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
                   📋 Copy decklist
                 </button>
               )}
+              {hasCombos && (
+                <button
+                  type="button"
+                  id="copy-combos-btn"
+                  class="deck-action-btn secondary"
+                  data-label="♾️ Export combos"
+                >
+                  ♾️ Export combos
+                </button>
+              )}
             </div>
           </div>
 
@@ -422,6 +487,12 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
         </textarea>
       )}
 
+      {hasCombos && (
+        <textarea id="combos-export" hidden aria-hidden="true" readOnly>
+          {combosText}
+        </textarea>
+      )}
+
       <div style="margin-top: 2rem;">
         <a href="/" class="back-link" id="back-link">← Back</a>
       </div>
@@ -433,10 +504,11 @@ export function DeckDetailPage({ deck, cached }: DeckDetailPageProps) {
 /**
  * Inline, dependency-free progressive enhancement for the deck-detail page:
  *  - Back link: intercept clicks to use history.back() when there's history.
- *  - Copy decklist: copy the hidden #decklist-export textarea's contents to the
- *    clipboard, preferring the async Clipboard API and falling back to
- *    execCommand('copy') on older/insecure contexts. Shows a brief "Copied!"
- *    confirmation on the button, then restores its original label.
+ *  - Copy decklist / Export combos: copy the relevant hidden <textarea>'s
+ *    contents to the clipboard, preferring an execCommand('copy') fallback
+ *    (reliable on insecure/http origins) and falling back to the async
+ *    Clipboard API. Shows a brief "Copied!" confirmation on the button, then
+ *    restores its original label.
  */
 function deckDetailScript(): string {
   return `
@@ -449,11 +521,7 @@ function deckDetailScript(): string {
     });
   }
 
-  var btn = document.getElementById('copy-decklist-btn');
-  var source = document.getElementById('decklist-export');
-  if (!btn || !source) return;
-
-  function flash(message) {
+  function flash(btn, message) {
     var original = btn.getAttribute('data-label') || btn.textContent;
     btn.textContent = message;
     btn.classList.add('is-copied');
@@ -505,27 +573,36 @@ function deckDetailScript(): string {
     return ok;
   }
 
-  btn.addEventListener('click', function() {
-    var text = source.value;
+  // Wire a copy button to its hidden source textarea. Tries the execCommand
+  // fallback first (reliable on http:// LAN/localhost dev), then the async
+  // Clipboard API (secure contexts).
+  function wireCopy(btnId, sourceId) {
+    var btn = document.getElementById(btnId);
+    var source = document.getElementById(sourceId);
+    if (!btn || !source) return;
 
-    // Try the fallback first: it's reliable on http:// origins (LAN / localhost
-    // dev) where navigator.clipboard is unavailable. If it fails, try the async
-    // Clipboard API (available on https:// / secure contexts).
-    if (fallbackCopy(text)) {
-      flash('✅ Copied!');
-      return;
-    }
+    btn.addEventListener('click', function() {
+      var text = source.value;
 
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function() {
-        flash('✅ Copied!');
-      }, function() {
-        flash('⚠️ Copy failed');
-      });
-    } else {
-      flash('⚠️ Copy failed');
-    }
-  });
+      if (fallbackCopy(text)) {
+        flash(btn, '✅ Copied!');
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          flash(btn, '✅ Copied!');
+        }, function() {
+          flash(btn, '⚠️ Copy failed');
+        });
+      } else {
+        flash(btn, '⚠️ Copy failed');
+      }
+    });
+  }
+
+  wireCopy('copy-decklist-btn', 'decklist-export');
+  wireCopy('copy-combos-btn', 'combos-export');
 })();
 `;
 }
