@@ -47,11 +47,11 @@ const cache = createCacheService(config);
 const browser = createBrowserService(config);
 const moxfield = createMoxfieldService(config, browser);
 const spellbook = createSpellbookService();
-const challengeService = createChallengeService(config, cache, moxfield, spellbook);
 const fxService = createFxService(cache);
 const cedhService = createCedhService(config, cache, moxfield, fxService);
 const scryfallService = createScryfallService(config, cache);
 const edhrecService = createEdhrecService(config, cache, browser);
+const challengeService = createChallengeService(config, cache, moxfield, spellbook, edhrecService);
 const buildCommanderService = createBuildCommanderService(
   config,
   cache,

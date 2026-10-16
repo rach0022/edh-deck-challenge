@@ -110,6 +110,19 @@ export interface DeckSlotEntry {
   commanderImages: (string | null)[];
   commanders: CommanderSlotInfo[];
   comboCount?: number;
+  /**
+   * Commander bracket (1–5: Exhibition, Core, Upgraded, Optimized, cEDH).
+   * Prefers Moxfield's own bracket; falls back to a Game-Changer-aware combo
+   * estimate. Optional; attached after the brackets are resolved.
+   */
+  bracket?: number;
+  /** Official WotC bracket name for `bracket` (e.g. "Upgraded"). */
+  bracketLabel?: string;
+  /**
+   * Where `bracket` came from: 'moxfield' (authoritative) or 'estimated'
+   * (our heuristic fallback). Lets the UI mark estimates as approximate.
+   */
+  bracketSource?: 'moxfield' | 'estimated';
 }
 
 export interface ColorSlot {

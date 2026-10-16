@@ -38,6 +38,7 @@ const PHASE_ROWS: Record<'challenge' | 'cedh' | 'build' | 'build-select' | 'find
     { id: 'phase-loading-decks', label: 'Load deck data' },
     { id: 'phase-organizing', label: 'Organize into color slots' },
     { id: 'phase-combos', label: 'Search for combos' },
+    { id: 'phase-brackets', label: 'Analyze brackets' },
     { id: 'phase-complete', label: 'Finalize results' },
   ],
   cedh: [
@@ -189,6 +190,7 @@ function loadingScript(sseUrl: string, redirectUrl: string, phaseOrderIds: strin
     'loading-decks': 'phase-loading-decks',
     'organizing': 'phase-organizing',
     'combos': 'phase-combos',
+    'brackets': 'phase-brackets',
     'matching': 'phase-matching',
     'finalizing': 'phase-complete',
     'complete': 'phase-complete'

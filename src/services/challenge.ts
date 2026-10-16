@@ -11,11 +11,15 @@ import type { AppConfig } from '../config.js';
 import type { CacheService } from './cache.js';
 import type { MoxfieldService } from './moxfield.js';
 import type { SpellbookService } from './spellbook.js';
+import type { EdhrecService } from './edhrec.js';
+import { EdhrecNotFoundError, EdhrecTimeoutError } from './edhrec.js';
 import { extractCommanders } from '../domain/commander-extractor.js';
 import { organizeDecks } from '../domain/deck-organizer.js';
 import { resolveColorIdentity, colorIdentityToKey } from '../domain/color-identity.js';
 import { COLOR_COMBINATIONS } from '../domain/color-combinations.js';
 import { classifyCardType, CARD_TYPE_ORDER } from '../domain/card-type.js';
+import { resolveDeckBracket } from '../domain/deck-bracket.js';
+import { normalizeCardName } from '../domain/deck-similarity.js';
 import type {
   ChallengeProgress,
   ChallengeResponse,
@@ -52,10 +56,56 @@ export function createChallengeService(
   cache: CacheService,
   moxfield: MoxfieldService,
   spellbook: SpellbookService,
+  edhrec: EdhrecService,
 ): ChallengeService {
 
   function cacheKey(type: string, id: string): string {
     return `edh:${type}:${id.toLowerCase()}`;
+  }
+
+  /** EDHREC panel header that lists format-defining "Game Changer" cards. */
+  const GAME_CHANGERS_CATEGORY = 'game changers';
+
+  /**
+   * Counts the EDHREC "Game Changer" cards present in a deck, for the bracket
+   * estimate fallback. Best-effort: an EDHREC miss/outage yields 0 rather than
+   * failing the challenge build.
+   */
+  async function countGameChangers(deck: MoxfieldDeckDetail): Promise<number> {
+    const extraction = extractCommanders(deck);
+    if (extraction.skipped || extraction.commanders.length === 0) return 0;
+
+    const selection = {
+      commander: extraction.commanders[0].name,
+      partner: extraction.commanders[1]?.name ?? null,
+      companion: null,
+    };
+
+    let recommendations: { name: string; category: string }[] = [];
+    try {
+      const result = await edhrec.getRecommendations(selection);
+      recommendations = result.recommendations;
+    } catch (error) {
+      if (error instanceof EdhrecNotFoundError || error instanceof EdhrecTimeoutError) {
+        return 0;
+      }
+      throw error;
+    }
+
+    const deckNames = new Set<string>();
+    for (const entry of Object.values(deck.commanders ?? {})) {
+      deckNames.add(normalizeCardName(entry.card.name));
+    }
+    for (const entry of Object.values(deck.mainboard ?? {})) {
+      deckNames.add(normalizeCardName(entry.card.name));
+    }
+
+    let count = 0;
+    for (const rec of recommendations) {
+      if ((rec.category ?? '').toLowerCase() !== GAME_CHANGERS_CATEGORY) continue;
+      if (deckNames.has(normalizeCardName(rec.name))) count++;
+    }
+    return count;
   }
 
   async function fetchAndProcessChallenge(username: string, onProgress?: ProgressCallback): Promise<ChallengeResponse> {
@@ -90,26 +140,68 @@ export function createChallengeService(
     const extractions = deckDetails.map((deck) => extractCommanders(deck));
     const progress = organizeDecks(extractions, username);
 
-    // Phase 4: Fetch combo counts for each deck (in parallel)
-    emit({ phase: 'combos', message: 'Searching for combos...', progress: 80, detail: `Checking ${deckDetails.length} decks for combos` });
+    // Phase 4: Fetch combo data for each deck (in parallel) and cache it.
+    emit({ phase: 'combos', message: 'Searching for combos...', progress: 78, detail: `Checking ${deckDetails.length} decks for combos` });
     const comboResults = await Promise.all(
       deckDetails.map(async (deck) => {
         const combos = await spellbook.findCombosForDeck(deck);
         // Cache combo data for the deck
         await cache.set(cacheKey('combos', deck.publicId), combos);
-        return { deckId: deck.publicId, comboCount: combos.comboCount };
+        return { deckId: deck.publicId, combos };
+      })
+    );
+    const combosByDeckId = new Map(comboResults.map((r) => [r.deckId, r.combos]));
+
+    // Phase 5: Resolve each deck's Commander bracket. Prefer Moxfield's own
+    // bracket (v3 endpoint); fall back to a Game-Changer-aware estimate built
+    // from the combos (above) plus the commander's EDHREC "Game Changers".
+    emit({ phase: 'brackets', message: 'Analyzing brackets...', progress: 88, detail: `Rating ${deckDetails.length} decks` });
+    const bracketResults = await Promise.all(
+      deckDetails.map(async (deck) => {
+        const combos = combosByDeckId.get(deck.publicId);
+        const comboCount = combos?.comboCount ?? 0;
+        const comboList = combos?.combos ?? [];
+
+        // Moxfield's native bracket (best-effort, authoritative when present).
+        const moxBracket = await moxfield.fetchDeckBracket(deck.publicId);
+
+        // Only pay for the EDHREC Game-Changers lookup when we actually need
+        // the estimate (Moxfield gave us no usable bracket).
+        const needsEstimate =
+          moxBracket?.ignoreBrackets === true ||
+          typeof moxBracket?.bracket !== 'number';
+        const gameChangerCount = needsEstimate ? await countGameChangers(deck) : 0;
+
+        const estimate = resolveDeckBracket({
+          moxfield: moxBracket,
+          comboCount,
+          combos: comboList,
+          gameChangerCount,
+        });
+
+        return {
+          deckId: deck.publicId,
+          comboCount,
+          bracket: estimate.bracket,
+          bracketLabel: estimate.label,
+          bracketSource: estimate.source,
+        };
       })
     );
 
-    // Attach combo counts to slot entries
-    const comboCountMap = new Map(comboResults.map((r) => [r.deckId, r.comboCount]));
+    // Attach combo counts + resolved bracket to slot entries.
+    const infoByDeckId = new Map(bracketResults.map((r) => [r.deckId, r]));
     for (const slot of progress.slots) {
       for (const deckEntry of slot.decks) {
-        deckEntry.comboCount = comboCountMap.get(deckEntry.deckId) ?? 0;
+        const info = infoByDeckId.get(deckEntry.deckId);
+        deckEntry.comboCount = info?.comboCount ?? 0;
+        deckEntry.bracket = info?.bracket;
+        deckEntry.bracketLabel = info?.bracketLabel;
+        deckEntry.bracketSource = info?.bracketSource;
       }
     }
 
-    const totalCombos = comboResults.reduce((sum, r) => sum + r.comboCount, 0);
+    const totalCombos = bracketResults.reduce((sum, r) => sum + r.comboCount, 0);
     emit({ phase: 'finalizing', message: 'Finalizing results...', progress: 95, detail: `Found ${totalCombos} total combos` });
 
     // Build summary

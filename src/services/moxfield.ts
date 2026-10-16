@@ -16,6 +16,12 @@ import type {
   Color,
 } from '../types.js';
 
+/** Coerces an unknown value to a 1–5 bracket number, or null. */
+function coerceBracket(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+}
+
 export class MoxfieldUserNotFoundError extends Error {
   constructor(username: string) {
     super(`Moxfield user "${username}" not found.`);
@@ -54,9 +60,28 @@ interface MoxfieldSearchResponse {
   }>;
 }
 
+/** Moxfield's native Commander bracket info (from the v3 deck endpoint). */
+export interface MoxfieldDeckBracket {
+  /** Effective bracket Moxfield reports (1–5), or null when absent. */
+  bracket: number | null;
+  /** The bracket the author set manually, or null. */
+  userBracket: number | null;
+  /** Moxfield's auto-computed bracket, or null. */
+  autoBracket: number | null;
+  /** True when the author opted the deck out of the bracket system. */
+  ignoreBrackets: boolean;
+}
+
 export interface MoxfieldService {
   fetchUserDecks(username: string): Promise<MoxfieldDeckSummary[]>;
   fetchDeckDetail(publicId: string): Promise<MoxfieldDeckDetail>;
+  /**
+   * Fetches a deck's Commander bracket from Moxfield's v3 deck endpoint (the
+   * v2 endpoint we use for `fetchDeckDetail` does not expose brackets).
+   * Best-effort: returns null on any failure or when no bracket is present, so
+   * callers can fall back to an estimate without failing the whole request.
+   */
+  fetchDeckBracket(publicId: string): Promise<MoxfieldDeckBracket | null>;
   isReady(): boolean;
   initialize(): Promise<void>;
   shutdown(): Promise<void>;
@@ -161,9 +186,36 @@ export function createMoxfieldService(
     return body as MoxfieldDeckDetail;
   }
 
+  async function fetchDeckBracket(
+    publicId: string,
+  ): Promise<MoxfieldDeckBracket | null> {
+    // Brackets live on the v3 deck endpoint; v2 (used by fetchDeckDetail) omits
+    // them. Derive the v3 base from the configured v2 base.
+    const v3Base = config.moxfieldBaseUrl.replace(/\/v\d+$/, '/v3');
+    const url = `${v3Base}/decks/all/${encodeURIComponent(publicId)}`;
+
+    try {
+      const { status, body } = await browserFetch(url);
+      if (status < 200 || status >= 300 || !body || typeof body !== 'object') {
+        return null;
+      }
+      const b = body as Record<string, unknown>;
+      return {
+        bracket: coerceBracket(b.bracket),
+        userBracket: coerceBracket(b.userBracket),
+        autoBracket: coerceBracket(b.autoBracket),
+        ignoreBrackets: b.ignoreBrackets === true,
+      };
+    } catch {
+      // Best-effort — a bracket miss should never fail the challenge build.
+      return null;
+    }
+  }
+
   return {
     fetchUserDecks,
     fetchDeckDetail,
+    fetchDeckBracket,
     // Lifecycle delegates to the shared browser service.
     isReady: () => browser.isReady(),
     initialize: () => browser.initialize(),

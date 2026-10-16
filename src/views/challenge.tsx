@@ -3,9 +3,11 @@
  */
 
 import { Layout } from './layout.js';
+import { BRACKET_LABELS } from '../domain/deck-bracket.js';
 import type {
   ChallengeResponse,
   ColorSlot,
+  DeckSlotEntry,
   SlotCategory,
   Color,
 } from '../types.js';
@@ -30,6 +32,130 @@ function manaSymbolUrl(color: Color): string {
 
 function artCropUrl(setCode: string, collectorNumber: string): string {
   return `https://api.scryfall.com/cards/${setCode}/${collectorNumber}?format=image&version=art_crop`;
+}
+
+/** Per-bracket accent colour (1 Exhibition → 5 cEDH). Matches the CSS. */
+const BRACKET_COLORS: Record<number, string> = {
+  1: '#34d399', // green
+  2: '#60a5fa', // blue
+  3: '#a855f7', // purple
+  4: '#fb923c', // orange
+  5: '#f87171', // red
+};
+
+/**
+ * Commander bracket gauge icon: a ring split into 5 segments, the first
+ * `bracket` of them filled in the bracket colour (the rest a muted track),
+ * with the bracket number in the centre. Pure inline SVG so it stays crisp at
+ * the small roster-tile size and needs no external assets. An estimated
+ * bracket renders the filled arcs dashed to read as approximate.
+ */
+function BracketIcon({ bracket, estimated }: { bracket: number; estimated: boolean }) {
+  const size = 18;
+  const center = size / 2;
+  const radius = 6.5;
+  const circumference = 2 * Math.PI * radius;
+  const segments = 5;
+  const gap = 2.2; // px gap between segments along the arc
+  const segLen = circumference / segments - gap;
+  const color = BRACKET_COLORS[bracket] ?? '#a855f7';
+
+  // Start at 12 o'clock and go clockwise.
+  const rotate = `rotate(-90 ${center} ${center})`;
+
+  return (
+    <svg
+      class="bracket-gauge"
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g transform={rotate}>
+        {Array.from({ length: segments }, (_, i) => {
+          const filled = i < bracket;
+          const offset = -(i * (segLen + gap));
+          return (
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke={filled ? color : 'rgba(255,255,255,0.18)'}
+              stroke-width={2.2}
+              stroke-linecap="round"
+              stroke-dasharray={`${segLen} ${circumference - segLen}`}
+              stroke-dashoffset={offset}
+              opacity={filled ? 1 : 0.9}
+            />
+          );
+        })}
+      </g>
+      <text
+        x={center}
+        y={center}
+        text-anchor="middle"
+        dominant-baseline="central"
+        class="bracket-gauge-num"
+        fill="#fff"
+      >
+        {estimated ? '~' : ''}{bracket}
+      </text>
+    </svg>
+  );
+}
+
+/**
+ * The bottom-right badge cluster for a single deck: its combo count (left) and
+ * its bracket gauge (right). Rendered once per deck in a slot so that, when a
+ * slot holds multiple decks, each deck's badges cross-fade in sync with the
+ * art/info carousel (via the `cycle` + `style` animation props) — the badges
+ * always match the deck currently on screen rather than showing an aggregate.
+ */
+function DeckBadges({
+  deck,
+  cycle,
+  style,
+}: {
+  deck: DeckSlotEntry;
+  cycle: boolean;
+  style: string;
+}) {
+  const combos = deck.comboCount ?? 0;
+  const hasBracket = typeof deck.bracket === 'number';
+
+  let bracketBadge = null;
+  if (hasBracket) {
+    const bracket = deck.bracket as number;
+    const label = BRACKET_LABELS[bracket] ?? '';
+    const estimated = deck.bracketSource !== 'moxfield';
+    const title = estimated
+      ? `Estimated Commander bracket ${bracket}${label ? ` — ${label}` : ''} (heuristic)`
+      : `Commander bracket ${bracket}${label ? ` — ${label}` : ''} (from Moxfield)`;
+    bracketBadge = (
+      <span
+        class={`bracket-badge bracket-badge-${bracket}${estimated ? ' bracket-badge-estimated' : ''}`}
+        title={title}
+      >
+        <BracketIcon bracket={bracket} estimated={estimated} />
+      </span>
+    );
+  }
+
+  return (
+    <div class={`roster-badges ${cycle ? 'roster-badges-cycle' : ''}`} style={style}>
+      {combos > 0 && (
+        <span
+          class="combo-count-badge"
+          title={`${combos} combo${combos === 1 ? '' : 's'} in this deck`}
+        >
+          ♾️ {combos}
+        </span>
+      )}
+      {bracketBadge}
+    </div>
+  );
 }
 
 /**
@@ -75,12 +201,25 @@ function SlotCard({ slot }: { slot: ColorSlot }) {
         </div>
       )}
 
-      {filled && (() => {
-        const totalCombos = slot.decks.reduce((sum, d) => sum + (d.comboCount ?? 0), 0);
-        return totalCombos > 0 ? (
-          <span class="combo-count-badge">♾️ {totalCombos}</span>
-        ) : null;
-      })()}
+      {/* Bottom-right badge cluster: combo count (left) + bracket gauge
+          (right), PER DECK. For a multi-deck slot the clusters cross-fade in
+          lock-step with the art/info carousel, so the badges always reflect the
+          deck currently on screen (not an aggregate). */}
+      {filled && slot.decks.some((d) => (d.comboCount ?? 0) > 0 || typeof d.bracket === 'number') && (
+        <div class={isMulti ? 'roster-badges-carousel' : ''}>
+          {slot.decks.map((deck, index) => (
+            <DeckBadges
+              deck={deck}
+              cycle={isMulti}
+              style={isMulti ? [
+                `animation-duration: ${cycleDuration}s`,
+                `animation-delay: ${index * 4}s`,
+                index > 0 ? 'opacity: 0' : '',
+              ].filter(Boolean).join('; ') : ''}
+            />
+          ))}
+        </div>
+      )}
 
       <div class="roster-slot-content">
         <div class="slot-colors">

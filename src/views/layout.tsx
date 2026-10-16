@@ -1949,14 +1949,76 @@ const css = `
   }
 
   /* Combo badge sits bottom-right on the roster tiles. */
-  .roster-slot .combo-count-badge {
-    top: auto;
-    left: auto;
+  /* Bottom-right badge cluster: combo count (left) + bracket gauge (right),
+     inline on one row. On a single-deck slot this is positioned directly;
+     on a multi-deck slot the carousel wrapper is positioned and the clusters
+     stack inside it (see below). */
+  .roster-badges {
+    position: absolute;
     bottom: 6px;
     right: 6px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* Multi-deck: one badge cluster per deck, cross-fading in lock-step with the
+     art/info carousel so the badges track the deck currently on screen. */
+  .roster-badges-carousel {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    z-index: 2;
+  }
+  .roster-badges-carousel .roster-badges {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    /* Lay out from the right so combo-left / gauge-right stays consistent. */
+    flex-direction: row;
+    white-space: nowrap;
+  }
+  .roster-badges.roster-badges-cycle {
+    animation-name: deckFade;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    will-change: opacity;
+  }
+
+  /* Inside the cluster the combo badge flows normally (the cluster handles
+     positioning). Sized to match its original compact roster size. */
+  .roster-slot .combo-count-badge {
+    position: static;
+    top: auto;
+    left: auto;
     padding: 2px 6px;
     font-size: 0.6rem;
+    line-height: 1;
   }
+
+  /* Commander bracket gauge — a radial SVG (5 segments, first N filled in the
+     bracket colour) with the number in the centre; no words, just the icon. */
+  .bracket-badge {
+    display: inline-flex;
+    line-height: 0;
+    /* Subtle disc behind the gauge so it reads over any card art. */
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  }
+  .bracket-gauge { display: block; }
+  .bracket-gauge-num {
+    font-size: 8px;
+    font-weight: 800;
+    font-family: inherit;
+  }
+  /* Per-bracket glow accent (colours live on the SVG arcs themselves). */
+  .bracket-badge-1 { box-shadow: 0 0 8px rgba(52, 211, 153, 0.45); }
+  .bracket-badge-2 { box-shadow: 0 0 8px rgba(96, 165, 250, 0.45); }
+  .bracket-badge-3 { box-shadow: 0 0 8px rgba(168, 85, 247, 0.45); }
+  .bracket-badge-4 { box-shadow: 0 0 8px rgba(251, 146, 60, 0.45); }
+  .bracket-badge-5 { box-shadow: 0 0 8px rgba(248, 113, 113, 0.5); }
 
   /* ─── Build a cEDH Deck Page ─────────────── */
 
@@ -3373,6 +3435,15 @@ const css = `
     }
 
     .deck-info.deck-info-cycle:not(:first-of-type) {
+      display: none;
+    }
+
+    /* Badge carousel: pin to the first deck's badges so none are stuck hidden. */
+    .roster-badges.roster-badges-cycle {
+      animation: none !important;
+      opacity: 1 !important;
+    }
+    .roster-badges.roster-badges-cycle:not(:first-of-type) {
       display: none;
     }
 
