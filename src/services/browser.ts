@@ -23,9 +23,28 @@ import type { AppConfig } from '../config.js';
  * own service-specific timeout/unavailable error.
  */
 export class BrowserFetchError extends Error {
-  constructor(message = 'Browser fetch failed.') {
+  /** The URL whose fetch failed, when known. */
+  public readonly url?: string;
+  constructor(message = 'Browser fetch failed.', options?: { cause?: unknown; url?: string }) {
     super(message);
     this.name = 'BrowserFetchError';
+    if (options?.cause !== undefined) {
+      // Preserve the original failure (navigation timeout, stale context,
+      // Cloudflare block, page.evaluate crash) so callers can log it.
+      (this as { cause?: unknown }).cause = options.cause;
+    }
+    this.url = options?.url;
+  }
+}
+
+/** Extracts a readable message from an unknown thrown value. */
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
   }
 }
 
@@ -52,38 +71,53 @@ export function createBrowserService(config: AppConfig): BrowserService {
 
     console.log('🌐 Launching browser...');
 
-    browser = await puppeteer.launch({
-      headless: config.puppeteerHeadless,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-      ],
-    });
+    try {
+      browser = await puppeteer.launch({
+        headless: config.puppeteerHeadless,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ],
+      });
 
-    page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
-    await page.setViewport({ width: 1280, height: 720 });
+      page = await browser.newPage();
+      await page.setUserAgent(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      );
+      await page.setViewport({ width: 1280, height: 720 });
 
-    // Navigate to Moxfield to solve Cloudflare challenge
-    console.log('🔐 Solving Cloudflare challenge...');
-    await page.goto('https://moxfield.com', {
-      waitUntil: 'networkidle2',
-      timeout: config.puppeteerTimeoutMs,
-    });
+      // Navigate to Moxfield to solve Cloudflare challenge
+      console.log('🔐 Solving Cloudflare challenge...');
+      await page.goto('https://moxfield.com', {
+        waitUntil: 'networkidle2',
+        timeout: config.puppeteerTimeoutMs,
+      });
 
-    // Wait for Cloudflare to clear
-    await page.waitForFunction(
-      () => !document.title.includes('Just a moment'),
-      { timeout: config.puppeteerTimeoutMs }
-    );
+      // Wait for Cloudflare to clear
+      await page.waitForFunction(
+        () => !document.title.includes('Just a moment'),
+        { timeout: config.puppeteerTimeoutMs }
+      );
 
-    ready = true;
-    console.log('✅ Browser ready — Cloudflare challenge solved.');
+      ready = true;
+      console.log('✅ Browser ready — Cloudflare challenge solved.');
+    } catch (error) {
+      ready = false;
+      // A failure here is the usual cause of "could not connect to Moxfield":
+      // the browser could not launch, navigation to moxfield.com timed out, or
+      // the Cloudflare "Just a moment" challenge never cleared within
+      // puppeteerTimeoutMs. Log it with full detail before surfacing.
+      console.error(
+        `❌ Browser initialize failed (puppeteerTimeoutMs=${config.puppeteerTimeoutMs}, headless=${config.puppeteerHeadless}): ${errorMessage(error)}`,
+        error,
+      );
+      throw new BrowserFetchError(
+        `Browser initialization failed: ${errorMessage(error)}`,
+        { cause: error, url: 'https://moxfield.com' },
+      );
+    }
   }
 
   async function ensureReady(): Promise<void> {
@@ -106,13 +140,56 @@ export function createBrowserService(config: AppConfig): BrowserService {
         } catch {
           body = text;
         }
-        return { status: response.status, body };
+        return {
+          status: response.status,
+          body,
+          contentType: response.headers.get('content-type') ?? '',
+        };
       }, url);
-      return result;
+
+      // Detect a Cloudflare interstitial: Moxfield's API should return JSON, so
+      // an HTML body (especially the "Just a moment" / "Attention Required"
+      // challenge) means our cleared session expired. Surface it clearly and
+      // recycle the browser so the next call re-solves the challenge.
+      const looksLikeHtml =
+        typeof result.body === 'string' &&
+        (result.contentType.includes('text/html') ||
+          /just a moment|cf-chl|challenge-platform|attention required/i.test(result.body));
+      if (looksLikeHtml) {
+        ready = false;
+        const snippet =
+          typeof result.body === 'string' ? result.body.slice(0, 200) : '';
+        console.error(
+          `❌ browserFetch got a non-JSON (likely Cloudflare) response for ${url} — status=${result.status}, content-type="${result.contentType}". Recycling browser. Body snippet: ${snippet}`,
+        );
+        throw new BrowserFetchError(
+          `Cloudflare challenge or non-JSON response (status ${result.status}) for ${url}`,
+          { url },
+        );
+      }
+
+      if (result.status < 200 || result.status >= 300) {
+        // Not an exception here — a real HTTP error status is a valid result the
+        // caller maps to its own API error. Log it so failures are visible.
+        console.warn(
+          `⚠️  browserFetch non-2xx for ${url} — status=${result.status}, content-type="${result.contentType}"`,
+        );
+      }
+
+      return { status: result.status, body: result.body };
     } catch (error) {
-      // Browser context may be stale — mark as not ready for retry
+      // Browser context may be stale — mark as not ready for retry.
       ready = false;
-      throw new BrowserFetchError();
+      // Re-throw our own already-logged Cloudflare error untouched.
+      if (error instanceof BrowserFetchError) throw error;
+      console.error(
+        `❌ browserFetch failed for ${url}: ${errorMessage(error)}`,
+        error,
+      );
+      throw new BrowserFetchError(
+        `Browser fetch failed for ${url}: ${errorMessage(error)}`,
+        { cause: error, url },
+      );
     }
   }
 

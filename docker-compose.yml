@@ -30,6 +30,11 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # Mount /tmp as an in-memory filesystem so Chromium/Puppeteer profile dirs
+    # (created under HOME=/tmp via mkdtemp) have room and are wiped on restart.
+    # Prevents ENOSPC from leaked puppeteer_dev_chrome_profile-* directories.
+    tmpfs:
+      - /tmp:size=512m
 
   redis:
     image: redis:7-alpine

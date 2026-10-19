@@ -19,6 +19,9 @@ export function handleError(error: unknown, c: Context): Response {
   }
 
   if (error instanceof MoxfieldAPIError) {
+    console.error(
+      `Moxfield API error (status ${error.statusCode}) on ${c.req.method} ${c.req.path}`,
+    );
     const status = error.statusCode >= 500 ? 502 : 400;
     return c.json(
       { success: false, error: error.message },
@@ -27,6 +30,15 @@ export function handleError(error: unknown, c: Context): Response {
   }
 
   if (error instanceof MoxfieldTimeoutError) {
+    // Previously silent — log the underlying cause so "could not connect to
+    // Moxfield" failures are diagnosable (Cloudflare block vs. timeout vs.
+    // launch failure).
+    const cause = (error as { cause?: unknown }).cause;
+    const url = (error as { url?: string }).url;
+    console.error(
+      `Moxfield unreachable on ${c.req.method} ${c.req.path}${url ? ` (url: ${url})` : ''}:`,
+      cause ?? error,
+    );
     return c.json(
       { success: false, error: error.message },
       504

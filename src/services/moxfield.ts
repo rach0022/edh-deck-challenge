@@ -39,10 +39,18 @@ export class MoxfieldAPIError extends Error {
 }
 
 export class MoxfieldTimeoutError extends Error {
-  constructor() {
+  constructor(options?: { cause?: unknown; url?: string }) {
     super('Could not reach Moxfield. The service may be temporarily unavailable.');
     this.name = 'MoxfieldTimeoutError';
+    if (options?.cause !== undefined) {
+      (this as { cause?: unknown }).cause = options.cause;
+    }
+    if (options?.url !== undefined) {
+      (this as { url?: string }).url = options.url;
+    }
   }
+  /** The URL that could not be reached, when known. */
+  public readonly url?: string;
 }
 
 interface MoxfieldSearchResponse {
@@ -111,8 +119,12 @@ export function createMoxfieldService(
       return await browser.browserFetch(url);
     } catch (error) {
       // The shared browser could not complete the fetch (stale context,
-      // navigation timeout, or unreachable) — surface it as a Moxfield timeout.
-      throw new MoxfieldTimeoutError();
+      // navigation timeout, Cloudflare block, or unreachable) — surface it as a
+      // Moxfield timeout but keep the underlying error as `cause` and log the
+      // failing URL so the real reason is recoverable from the logs.
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Moxfield request failed for ${url}: ${reason}`);
+      throw new MoxfieldTimeoutError({ cause: error, url });
     }
   }
 
