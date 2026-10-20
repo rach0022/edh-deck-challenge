@@ -1,9 +1,10 @@
 # ─── EDH Deck Challenge — Local Development ─────────────────────────────────
 # Run: docker compose up --build
 # Access: http://localhost:3000
-
+name: the-command-crypt-stack
 services:
   app:
+    container_name: the-command-crypt
     build:
       context: .
       dockerfile: Dockerfile
